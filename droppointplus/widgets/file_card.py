@@ -84,7 +84,8 @@ class FileCard(QFrame):
         name.setMinimumWidth(0)  # let the layout truncate before the size/button
         layout.addWidget(name, 1)
 
-        if show_size:
+        # Sizes are only meaningful for files — folder rows skip the column.
+        if show_size and item.file_type != "folder":
             size_label = QLabel(format_size(item.path), self)
             size_label.setAlignment(Qt.AlignRight | Qt.AlignVCenter)
             size_label.setStyleSheet(

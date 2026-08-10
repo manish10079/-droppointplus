@@ -9,6 +9,22 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [Unreleased]
 
+## [0.1.1] - 2026-08-10
+
+### Fixed
+
+- Collection list scrolled only one way with smooth-scroll mice: fractional
+  wheel notches (e.g. +/-40 instead of +/-120) truncated upward scrolling to
+  zero. Wheel deltas are now scaled in a single division, so up and down
+  scroll symmetrically.
+
+### Changed
+
+- Folder rows in the collection list no longer show a size — only files do.
+- README, migration plan and the package docstring now point at the upstream
+  GameGodS3/DropPoint repository instead of the removed local
+  `Droppoint-old/` folder.
+
 ## [0.1.0] - 2026-08-10
 
 First milestone — the complete core DropPoint workflow, rebuilt from scratch

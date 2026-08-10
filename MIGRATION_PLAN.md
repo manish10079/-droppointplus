@@ -2,8 +2,8 @@
 
 > **Status:** plan + working scaffold complete (2026-08-10)
 > **Stack decision:** rebuild from scratch in **PySide6** — the official Qt for
-> Python bindings (LGPL, actively maintained). The old Electron app stays in
-> `../Droppoint-old/` as the behavioural reference.
+> Python bindings (LGPL, actively maintained). The old Electron app is the
+> behavioural reference (upstream: <https://github.com/GameGodS3/DropPoint>).
 
 ---
 
@@ -87,7 +87,7 @@ multiple shelf "instances" can be open at once. Inspired by Dropover/Yoink.
 
 ### 3.3 Architecture critique — carried into the rebuild
 
-| Old problem (from `Droppoint-old/docs/planning/PLANNING.md` §4) | How DropPoint+ fixes it |
+| Old problem (from the upstream `docs/planning/PLANNING.md` §4) | How DropPoint+ fixes it |
 |---|---|
 | `new Store(configOptions)` repeated in 5 files → schema drift | one `ConfigManager` built in `main()`, passed down |
 | shared preload conflates two windows' concerns | no preload at all |

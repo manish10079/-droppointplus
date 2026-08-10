@@ -117,14 +117,21 @@ class FileList(QWidget):
         pixels = event.pixelDelta().y()
         if pixels:
             self._offset = max(0, min(max_offset, self._offset - pixels))
-        else:
-            steps = event.angleDelta().y() // 120
-            if not steps:
-                event.ignore()
-                return
-            self._offset = max(0, min(
+            self._relayout()
+            event.accept()
+            return
+        delta = event.angleDelta().y()
+        if not delta:
+            event.ignore()
+            return
+        # Scale the notch by the row pitch in ONE division so high-resolution
+        # wheels (fractional notches, e.g. +40/-40) scroll symmetrically in
+        # both directions. The previous `delta // 120` truncated toward zero:
+        # -40 // 120 == -1 (down works) but +40 // 120 == 0 (up is dropped).
+        self._offset = max(
+            0, min(
                 max_offset,
-                self._offset - steps * (ROW_H + ROW_SPACING),
+                self._offset - delta * (ROW_H + ROW_SPACING) // 120,
             ))
         self._relayout()
         event.accept()

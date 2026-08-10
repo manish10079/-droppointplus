@@ -128,7 +128,8 @@ droppointplus/
 
 The full migration plan (Electron → Qt6) lives in
 [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md). The original Electron codebase is
-kept at `../Droppoint-old/` as the behavioural reference.
+the behavioural reference, upstream at
+[GameGodS3/DropPoint](https://github.com/GameGodS3/DropPoint).
 
 ## Versioning
 

@@ -59,8 +59,14 @@ kept asking for.
   multi-instance, and **draggable** (grab the header or the empty area)
 - **Drag files in** from anywhere, **drag them back out** anywhere — across
   virtual desktops and fullscreen apps
-- **Copy or Move** — `drag_action` setting; move mode deletes sources on a
-  background worker thread with a progress bar on the shelf
+- **Copy or Move with a destination picker** — footer **COPY** / **MOVE**
+  buttons open the picker (FAVORITES: Desktop/Downloads/Documents/Pictures +
+  your pinned folders, RECENT destinations, live search, Browse…); transfers
+  run on a background worker with live byte progress, speed, ETA and a
+  **Cancel** button; duplicates auto-rename (`file (1).ext`), and the success
+  panel offers **Open destination**
+- **Drag-out move mode** — `drag_action` setting; after a completed drag-out,
+  move mode deletes sources on a background worker thread with progress
 - **Configurable global hotkey** (`Shift+Capslock` by default on
   Windows/Linux, `Shift+Tab` on macOS) — live-rebinding from Settings
 - **System tray** — New Instance / Settings / Quit + **History** submenu
@@ -72,6 +78,9 @@ kept asking for.
   items` roster: per-row type icon, name, size, and **✕ remove**; scrolls
   with wheel or touchpad once it overflows
 - **Clear all** button in the footer (and `Esc`) to empty the shelf
+- **Destination picker** — favourites & recents persist across sessions
+  (`favorites` / `recent_destinations` in the config); transfers remember
+  their last destinations
 - Per-file-type icons, dark Material-inspired theme with all colors
   centralized in `colors.py`
 - Clean **MVVM** architecture: `View → ViewModel → Service`, dependency

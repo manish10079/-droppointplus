@@ -12,7 +12,7 @@ propagating from the rows up to the window.
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import QRect, Qt, Signal
 from PySide6.QtGui import QPainter, QWheelEvent
 from PySide6.QtWidgets import QLabel, QWidget
 
@@ -51,6 +51,11 @@ class FileList(QWidget):
             f"color: {colors.rgba(colors.TEXT_SECONDARY)}; font-size: 11px;"
         )
 
+        # Rows live inside a masked viewport confined to the band between the
+        # header and the hint. The mask clips every child to that band, so
+        # scrolled rows slide UNDER the labels instead of painting over them.
+        self._viewport = QWidget(self)
+
         self._relayout()
 
     # -- public api ---------------------------------------------------------
@@ -63,7 +68,7 @@ class FileList(QWidget):
             row.deleteLater()
         self._rows = []
         for item in self._items:
-            card = FileCard(item, removable=True, parent=self)
+            card = FileCard(item, removable=True, parent=self._viewport)
             card.remove_requested.connect(self.remove_requested.emit)
             self._rows.append(card)
         self._offset = min(self._offset, self._max_offset())
@@ -89,13 +94,27 @@ class FileList(QWidget):
 
         top = HEADER_H + MARGIN
         bottom = self.height() - HINT_H - MARGIN
+        band = max(0, bottom - top)
+        self._viewport.setGeometry(0, top, self.width(), band)
+        if band > 0:
+            # Clip every row to the band: this is what keeps the header and
+            # the hint readable while rows scroll past them.
+            self._viewport.setMask(QRect(0, 0, self.width(), band))
+        else:
+            self._viewport.clearMask()
+
         for i, card in enumerate(self._rows):
-            y = top + i * (ROW_H + ROW_SPACING) - self._offset
+            # Viewport-local coordinates: rows are clipped by the mask, so a
+            # partially scrolled row may sit above 0 or below `band`.
+            y = i * (ROW_H + ROW_SPACING) - self._offset
+            if y + ROW_H <= 0 or y >= band:
+                card.setVisible(False)
+                continue
             card.setGeometry(
                 MARGIN, y,
                 self.width() - 2 * MARGIN - _SCROLLBAR_W, ROW_H,
             )
-            card.setVisible(y < bottom and y + ROW_H > top)
+            card.setVisible(True)
 
         self._hint.setGeometry(
             MARGIN, self.height() - HINT_H - 2,

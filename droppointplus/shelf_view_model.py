@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from PySide6.QtCore import QObject, Qt, Signal
 
 from .app_config import ConfigManager
-from .file_service import DeleteWorker, FileService
+from .file_service import DeleteWorker, FileService, TransferWorker
 from .models import FileItem
 
 if TYPE_CHECKING:
@@ -30,6 +30,10 @@ class ShelfViewModel(QObject):
     close_requested = Signal()
     operation_started = Signal()             # move-mode deletion began
     operation_progress = Signal(int, int)    # done, total
+    transfer_started = Signal(str, str)      # verb ("Copying"/"Moving"), destination
+    transfer_progress = Signal(int, int, float)  # done bytes, total bytes, speed B/s
+    transfer_finished = Signal(int)          # failure count
+    transfer_cancelled = Signal()
 
     def __init__(
         self,
@@ -45,6 +49,8 @@ class ShelfViewModel(QObject):
         self._files: list[FileItem] = []
         self._worker: DeleteWorker | None = None
         self._failures = 0
+        self._transfer: TransferWorker | None = None
+        self._transfer_failures = 0
 
     # -- queries ------------------------------------------------------------
     @property
@@ -61,8 +67,13 @@ class ShelfViewModel(QObject):
 
     @property
     def is_working(self) -> bool:
-        """True while a background operation (move-mode deletion) runs."""
-        return self._worker is not None
+        """True while any background operation (deletion or transfer) runs."""
+        return self._worker is not None or self._transfer is not None
+
+    @property
+    def config(self) -> ConfigManager:
+        """Expose the config so the View can open the destination picker."""
+        return self._config
 
     # -- commands -----------------------------------------------------------
     def can_accept_drop(self, event) -> bool:
@@ -154,6 +165,65 @@ class ShelfViewModel(QObject):
         # Keep the persisted snapshot in step with the shelf contents.
         self._service.record_drop(self._instance_id, self._files)
         self.files_changed.emit(self._instance_id, list(self._files))
+
+    # -- copy / move to a chosen destination ----------------------------------
+    def start_transfer(self, destination: str, action: str) -> None:
+        """Copy or move the collected files to ``destination`` on a worker.
+
+        The transfer runs on a ``TransferWorker`` thread with byte-level
+        progress; completed items are trimmed from the collection live (so a
+        cancelled transfer keeps exactly the items that were not done yet).
+        The destination is remembered for the picker's RECENT list.
+        """
+        if not self._files or self.is_working:
+            return
+        self._transfer_failures = 0
+        snapshot = list(self._files)
+        worker = self._service.create_transfer_worker(
+            snapshot, destination, action, parent=self
+        )
+        self._transfer = worker
+        worker.progress.connect(self._on_transfer_progress)
+        worker.item_done.connect(self._on_transfer_item_done)
+        worker.failed.connect(self._on_transfer_failed)
+        worker.finished.connect(self._on_transfer_finished)
+        worker.start()
+        verb = "Copying" if action == "copy" else "Moving"
+        self.transfer_started.emit(verb, str(destination))
+
+        recents = [
+            p for p in self._config.get("recent_destinations", [])
+            if p != str(destination)
+        ]
+        self._config.set("recent_destinations", [str(destination), *recents][:8])
+
+    def cancel_transfer(self) -> None:
+        """Cooperatively stop the running transfer (keeps remaining items)."""
+        if self._transfer is not None:
+            self._transfer.cancel()
+
+    def _on_transfer_progress(self, done: int, total: int, speed: float) -> None:
+        self.transfer_progress.emit(done, total, speed)
+
+    def _on_transfer_item_done(self, item: FileItem) -> None:
+        if item in self._files:
+            self._files.remove(item)
+            self.files_changed.emit(self._instance_id, list(self._files))
+
+    def _on_transfer_failed(self, item: FileItem) -> None:
+        self._transfer_failures += 1
+
+    def _on_transfer_finished(self) -> None:
+        worker = self._transfer
+        self._transfer = None
+        cancelled = False
+        if worker is not None:
+            cancelled = worker.cancelled
+            worker.deleteLater()
+        if cancelled:
+            self.transfer_cancelled.emit()
+        else:
+            self.transfer_finished.emit(self._transfer_failures)
 
     def clear(self) -> None:
         """Discard the collected files (Esc in the View)."""

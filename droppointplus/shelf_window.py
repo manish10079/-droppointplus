@@ -22,17 +22,21 @@ from __future__ import annotations
 
 import logging
 
+from pathlib import Path
+
 from PySide6.QtCore import (
     QAbstractAnimation,
     QEasingCurve,
     QPointF,
     QRectF,
     Qt,
+    QUrl,
     QVariantAnimation,
     Signal,
 )
 from PySide6.QtGui import (
     QCursor,
+    QDesktopServices,
     QGuiApplication,
     QKeyEvent,
     QMouseEvent,
@@ -42,6 +46,9 @@ from PySide6.QtGui import (
     QPixmap,
 )
 from PySide6.QtWidgets import QLabel, QWidget
+
+from .destination_dialog import DestinationDialog
+from .widgets.file_card import format_bytes
 
 from . import colors
 from .shelf_view_model import ShelfViewModel
@@ -122,25 +129,44 @@ class _HeaderButton(QLabel):
 
 
 class _TextButton(QLabel):
-    """Small text button (footer "Clear all"). Same lifetime-safe pattern
-    as ``_HeaderButton``: emit LAST, then consume the event — never touch
-    the widget after an emit that could destroy it.
+    """Small text button (footer actions). Same lifetime-safe pattern as
+    ``_HeaderButton``: emit LAST, then consume the event — never touch the
+    widget after an emit that could destroy it.
     """
 
     clicked = Signal()
 
-    def __init__(self, text: str, parent: QWidget):
+    def __init__(self, text: str, parent: QWidget, variant: str = "ghost"):
         super().__init__(text, parent)
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
         self.setAttribute(Qt.WA_Hover, True)
-        self.setStyleSheet(
-            f"QLabel {{ color: {colors.rgba(colors.TEXT_SECONDARY)};"
-            " font-size: 12px; font-weight: 600; border-radius: 13px; }"
-            f"QLabel:hover {{ color: {colors.rgba(colors.TEXT_PRIMARY)};"
-            f" background-color:"
-            f" {colors.rgba(colors.SURFACE_CONTAINER_HIGH)}; }}"
-        )
+        if variant == "primary":
+            style = (
+                f"QLabel {{ background-color:"
+                f" {colors.rgba(colors.PRIMARY_ACTIVE)};"
+                f" color: {colors.rgba(colors.SURFACE)};"
+                " font-size: 12px; font-weight: 700; border-radius: 13px; }"
+                f"QLabel:hover {{ background-color:"
+                f" {colors.rgba(colors.PRIMARY)}; }}"
+            )
+        elif variant == "outline":
+            style = (
+                f"QLabel {{ color: {colors.rgba(colors.PRIMARY)};"
+                " font-size: 12px; font-weight: 600; border-radius: 13px;"
+                f" border: 1px solid {colors.rgba(colors.PRIMARY_ACTIVE)}; }}"
+                f"QLabel:hover {{ background-color:"
+                f" {colors.rgba(colors.PRIMARY_TINT)}; }}"
+            )
+        else:
+            style = (
+                f"QLabel {{ color: {colors.rgba(colors.TEXT_SECONDARY)};"
+                " font-size: 12px; font-weight: 600; border-radius: 13px; }"
+                f"QLabel:hover {{ color: {colors.rgba(colors.TEXT_PRIMARY)};"
+                f" background-color:"
+                f" {colors.rgba(colors.SURFACE_CONTAINER_HIGH)}; }}"
+            )
+        self.setStyleSheet(style)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton:
@@ -189,6 +215,13 @@ class ShelfWindow(QWidget):
         self._vm.close_requested.connect(self.close)
         self._vm.operation_started.connect(self._on_operation_started)
         self._vm.operation_progress.connect(self._on_operation_progress)
+        self._vm.transfer_started.connect(self._on_transfer_started)
+        self._vm.transfer_progress.connect(self._on_transfer_progress)
+        self._vm.transfer_finished.connect(self._on_transfer_finished)
+        self._vm.transfer_cancelled.connect(self._finish_transfer_ui)
+        self._transfer_verb = ""
+        self._transfer_dest = None
+        self._transfer_count = 0
         self._refresh_ui()
 
     # ------------------------------------------------------------------ UI
@@ -287,26 +320,44 @@ class ShelfWindow(QWidget):
         # --- footer -------------------------------------------------------
         self._items_label = QLabel("0 items", self)
         self._items_label.setGeometry(
-            SHADOW_MARGIN + 24, SHADOW_MARGIN + CONTENT_H - FOOTER_H + 15, 200, 18
+            SHADOW_MARGIN + 24, SHADOW_MARGIN + CONTENT_H - FOOTER_H + 15, 100, 18
         )
         self._items_label.setStyleSheet(
             f"color: {colors.rgba(colors.TEXT_SECONDARY)};"
             " font-size: 12px; font-weight: 500;"
         )
 
-        # "Clear all" — visible only while files are held; forwards to the
-        # ViewModel command (Esc does the same).
+        # Footer actions: Clear all · MOVE (outline) · COPY (filled).
         self._btn_clear = _TextButton("Clear all", self)
         self._btn_clear.setGeometry(
-            SHADOW_MARGIN + CONTENT_W - 100,
+            SHADOW_MARGIN + 136,
             SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
-            76,
+            66,
             26,
         )
         self._btn_clear.clicked.connect(self._vm.clear)
-        self._btn_clear.hide()
 
-        # --- move-mode progress overlay -----------------------------------
+        self._btn_move = _TextButton("MOVE", self, variant="outline")
+        self._btn_move.setGeometry(
+            SHADOW_MARGIN + 212,
+            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
+            58,
+            26,
+        )
+        self._btn_move.clicked.connect(lambda: self._open_destination_picker("move"))
+
+        self._btn_copy = _TextButton("COPY", self, variant="primary")
+        self._btn_copy.setGeometry(
+            SHADOW_MARGIN + 278,
+            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
+            58,
+            26,
+        )
+        self._btn_copy.clicked.connect(lambda: self._open_destination_picker("copy"))
+        for btn in (self._btn_clear, self._btn_move, self._btn_copy):
+            btn.hide()
+
+        # --- operation overlay (progress / success) -----------------------
         self._progress = ProgressWidget(self)
         self._progress.setGeometry(
             round(DROP_RECT.x()) + 20,
@@ -319,7 +370,28 @@ class ShelfWindow(QWidget):
             f"background-color: {colors.rgba(colors.SURFACE_CONTAINER, 230)};"
             " border-radius: 8px;"
         )
+        self._progress.cancel_requested.connect(self._vm.cancel_transfer)
         self._progress.hide()
+
+        # Transfer-complete panel (reuses the overlay area).
+        overlay_x = round(DROP_RECT.x()) + 20
+        overlay_y = round(DROP_RECT.y()) + (round(DROP_RECT.height()) - 96) // 2
+        self._success = QLabel("", self)
+        self._success.setAlignment(Qt.AlignCenter)
+        self._success.setWordWrap(True)
+        self._success.setGeometry(overlay_x, overlay_y + 10, 272, 40)
+        self._success.setStyleSheet(
+            f"color: {colors.rgba(colors.SUCCESS)};"
+            " font-size: 13px; font-weight: 600;"
+        )
+        self._btn_open_dest = _TextButton("Open destination", self, variant="outline")
+        self._btn_open_dest.setGeometry(overlay_x + 16, overlay_y + 58, 120, 26)
+        self._btn_open_dest.clicked.connect(self._open_destination)
+        self._btn_done = _TextButton("Done", self, variant="primary")
+        self._btn_done.setGeometry(overlay_x + 272 - 16 - 76, overlay_y + 58, 76, 26)
+        self._btn_done.clicked.connect(self._finish_transfer_ui)
+        for w in (self._success, self._btn_open_dest, self._btn_done):
+            w.hide()
 
         # Pulsing dashed border while a drag hovers over the window.
         self._border_anim = QVariantAnimation(self)
@@ -338,6 +410,8 @@ class ShelfWindow(QWidget):
             widget.setVisible(empty_visible)
         self._file_list.setVisible(holding)
         self._btn_clear.setVisible(holding)
+        self._btn_copy.setVisible(holding)
+        self._btn_move.setVisible(holding)
         self._items_label.setText(f"{n} item{'s' if n != 1 else ''}")
         # Sync unconditionally (a no-op when the roster is unchanged) so the
         # list never keeps stale rows after clear/remove.
@@ -464,17 +538,8 @@ class ShelfWindow(QWidget):
             super().keyPressEvent(event)
 
     # ----------------------------------------------------------- operation
-    def _on_operation_started(self) -> None:
-        """Move-mode deletion is running — show progress, freeze the shelf.
-
-        Note: nothing here is ever reset — the ViewModel always follows with
-        ``close_requested`` once the worker finishes, so the window closes
-        (state restore would only matter if the auto-close were removed).
-        """
-        self._progress.show()
-        self._progress.set_progress(0)
-        self._progress.set_status("Moving files…")
-        self._items_label.setText("Moving…")
+    def _enter_operation_view(self) -> None:
+        """Freeze the shelf while a background operation runs."""
         for widget in (
             self._circle,
             self._title,
@@ -486,13 +551,97 @@ class ShelfWindow(QWidget):
         self._btn_settings.hide()
         self._btn_close.hide()
         self._btn_clear.hide()
+        self._btn_copy.hide()
+        self._btn_move.hide()
         self.setAcceptDrops(False)
         self.update()
+
+    def _leave_operation_view(self) -> None:
+        """Restore the shelf after an operation ends or is cancelled."""
+        self._progress.hide()
+        self.setAcceptDrops(True)
+        self._refresh_ui()
+
+    def _on_operation_started(self) -> None:
+        """Move-mode deletion is running — show progress, freeze the shelf.
+
+        Note: nothing here is ever reset — the ViewModel always follows with
+        ``close_requested`` once the worker finishes, so the window closes
+        (state restore would only matter if the auto-close were removed).
+        """
+        self._progress.show()
+        self._progress.set_progress(0)
+        self._progress.set_status("Moving files…")
+        self._progress.set_detail("")
+        self._progress.set_cancellable(False)
+        self._items_label.setText("Moving…")
+        self._enter_operation_view()
 
     def _on_operation_progress(self, done: int, total: int) -> None:
         percent = (done / total * 100) if total else 0
         self._progress.set_progress(percent)
         self._progress.set_status(f"Moving {done} of {total}…")
+
+    # -------------------------------------------------------------- transfer
+    def _open_destination_picker(self, action: str) -> None:
+        """Open the destination picker; a selection starts the transfer."""
+        dialog = DestinationDialog(self._vm.config, action=action, parent=self)
+        dialog.selected.connect(lambda dest: self._vm.start_transfer(dest, action))
+        dialog.exec()
+
+    def _on_transfer_started(self, verb: str, destination: str) -> None:
+        self._transfer_verb = verb
+        self._transfer_dest = destination
+        self._transfer_count = self._vm.count
+        self._progress.show()
+        self._progress.set_progress(0)
+        self._progress.set_status(f"{verb} files…")
+        self._progress.set_detail(Path(destination).name)
+        self._progress.set_cancellable(True)
+        self._enter_operation_view()
+
+    def _on_transfer_progress(
+        self, done: int, total: int, speed: float
+    ) -> None:
+        if not total:
+            return
+        self._progress.set_progress(done / total * 100)
+        self._progress.set_status(
+            f"{self._transfer_verb} {format_bytes(done)} of {format_bytes(total)}"
+        )
+        detail = f"{format_bytes(round(speed))}/s" if speed > 0 else ""
+        if speed > 0 and done < total:
+            detail += f" · ~{(total - done) / speed:.0f}s left"
+        self._progress.set_detail(detail)
+
+    def _on_transfer_finished(self, failures: int) -> None:
+        """Transfer done — show the success panel (design.md #7)."""
+        self._progress.hide()
+        dest_name = Path(self._transfer_dest or "").name or (self._transfer_dest or "")
+        n = self._transfer_count
+        msg = (
+            f"✓ {self._transfer_verb} complete —"
+            f" {n} item{'s' if n != 1 else ''} → {dest_name}"
+        )
+        if failures:
+            msg += f"  ({failures} failed — still in collection)"
+        self._success.setText(msg)
+        self._success.show()
+        self._btn_open_dest.show()
+        self._btn_done.show()
+        self.update()
+
+    def _finish_transfer_ui(self) -> None:
+        """Leave the success panel / cancelled state and restore the shelf."""
+        self._success.hide()
+        self._btn_open_dest.hide()
+        self._btn_done.hide()
+        self._leave_operation_view()
+
+    def _open_destination(self) -> None:
+        if self._transfer_dest:
+            QDesktopServices.openUrl(QUrl.fromLocalFile(self._transfer_dest))
+        self._finish_transfer_ui()
 
     def _start_border_animation(self) -> None:
         if self._border_anim.state() != QAbstractAnimation.State.Running:

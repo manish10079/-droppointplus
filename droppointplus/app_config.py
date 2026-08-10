@@ -70,6 +70,10 @@ DEFAULT_CONFIG: dict = {
     # (parity with src/Shortcut.js).
     "shortcut": "Shift+Capslock" if sys.platform != "darwin" else "Shift+Tab",
     "debug": False,
+    # Destination picker state (app-managed, not surfaced in the settings
+    # dialog — these are not CONFIG_SCHEMA keys, only DEFAULT_CONFIG ones).
+    "favorites": [],             # user-pinned destination folders
+    "recent_destinations": [],   # last-used transfer destinations (max 8)
 }
 
 

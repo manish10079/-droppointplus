@@ -281,6 +281,7 @@ the icon stack + count refresh.
 | **Dark UI (mockup replication)** | shelf follows `ui design/empty_drop_zone` (header + dashed drop zone + footer); colours from `colors.py` | scaffold ✓ — selected/drag-over state = purple highlight |
 | **Configurable shortcuts** (#52/#42/#10) | `shortcut` string in config; `ConfigManager.changed` → live `QHotkey.setShortcut` | scaffold ✓ |
 | **Instance history** (disabled feature) | `history.py` on the fixed app-data path; `add_to_instance` on every drop; tray History submenu (last 5, display-only) | scaffold ✓ |
+| **Destination picker + COPY/MOVE** (design.md #3/#4/#6/#7) | footer **COPY/MOVE** buttons → `DestinationDialog` (FAVORITES + RECENT + search + Browse); `TransferWorker` thread with byte progress/speed/ETA/cancel; auto-rename duplicates; success panel with **Open destination** | ✓ done — v0.2.0 |
 
 Nice-to-haves for later: key-combo capture UI (replace the free-text shortcut
 field with a recorder), clickable history entries that reopen files into a new
@@ -295,7 +296,7 @@ instance.
 | **0 — Environment** (30 min) | venv, `pip install -r requirements.txt`, verify PySide6 resolves on your Python | `python -m droppointplus` boots, tray icon appears |
 | **1 — Core shelf** (2–3 d) | shelf window, drag-in/out, icons, multi-instance, cursor/centre positioning, always-on-top | drop files in from Explorer, drag them out into another folder; two shelves coexisting; Esc clears |
 | **2 — System integration** (1–2 d) | tray menu, global hotkey + toggle/spawn, settings dialog with live rebind | hotkey opens/toggles shelves; settings apply without restart |
-| **3 — Backlog** (2–3 d) | move-mode hardening, shortcut capture UI, history polish, per-platform quirks | move mode moves, history shows in tray, macOS all-workspaces + perms |
+| **3 — Backlog** (2–3 d) | destination picker polish (favourites management UI, copy/move confirmations), shortcut capture UI, history polish, per-platform quirks | picker copies & moves with progress; history shows in tray; macOS all-workspaces + perms |
 | **4 — Packaging & updates** (2–3 d) | PyInstaller one-dir builds; NSIS (Win) / create-dmg (mac) / AppImage (Linux); `tufup` or GitHub Releases auto-update | installers build in CI for all 3 OSes; auto-update path works |
 | **5 — Hardening** (1–2 d) | pytest suite in CI, Wayland fallback, Windows HiDPI, animations polish | green CI; manual smoke on Win/mac/Linux |
 

@@ -7,11 +7,12 @@ across threads, per the development skills).
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt
-from PySide6.QtWidgets import QLabel, QProgressBar, QVBoxLayout, QWidget
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtWidgets import QLabel, QProgressBar, QPushButton, QVBoxLayout, QWidget
 
 from ..colors import (
     BORDER_SUBTLE,
+    ERROR,
     PRIMARY_ACTIVE,
     SURFACE_CONTAINER,
     TEXT_SECONDARY,
@@ -28,13 +29,15 @@ _BAR_STYLE = (
 
 
 class ProgressWidget(QWidget):
-    """Percent progress + status text, optionally indeterminate."""
+    """Percent progress + status line + optional detail + optional Cancel."""
+
+    cancel_requested = Signal()
 
     def __init__(self, parent=None):
         super().__init__(parent)
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
-        layout.setSpacing(4)
+        layout.setSpacing(3)
 
         self._bar = QProgressBar(self)
         self._bar.setRange(0, 100)
@@ -49,6 +52,27 @@ class ProgressWidget(QWidget):
         )
         layout.addWidget(self._status)
 
+        self._detail = QLabel("", self)
+        self._detail.setAlignment(Qt.AlignCenter)
+        self._detail.setStyleSheet(
+            f"color: {rgba(TEXT_SECONDARY)}; font-size: 10px;"
+        )
+        layout.addWidget(self._detail)
+
+        self._cancel_btn = QPushButton("Cancel", self)
+        self._cancel_btn.setCursor(Qt.PointingHandCursor)
+        self._cancel_btn.setStyleSheet(
+            f"QPushButton {{ background: transparent;"
+            f" color: {rgba(TEXT_SECONDARY)}; font-size: 11px;"
+            f" border: 1px solid {rgba(BORDER_SUBTLE)}; border-radius: 10px;"
+            " padding: 1px 12px; }"
+            f"QPushButton:hover {{ color: {rgba(ERROR)};"
+            f" border-color: {rgba(ERROR)}; }}"
+        )
+        self._cancel_btn.clicked.connect(self.cancel_requested.emit)
+        self._cancel_btn.hide()
+        layout.addWidget(self._cancel_btn, 0, Qt.AlignHCenter)
+
     # -- api -----------------------------------------------------------------
     def set_progress(self, percent: float) -> None:
         """Set a determinate 0–100 percent value (clamped)."""
@@ -62,3 +86,11 @@ class ProgressWidget(QWidget):
     def set_status(self, text: str) -> None:
         """Update the status line (e.g. 'Moving 3 of 12…')."""
         self._status.setText(text)
+
+    def set_detail(self, text: str) -> None:
+        """Update the smaller detail line (e.g. '2.4 MB/s · ~3s left')."""
+        self._detail.setText(text)
+
+    def set_cancellable(self, active: bool) -> None:
+        """Show/hide the Cancel button."""
+        self._cancel_btn.setVisible(active)

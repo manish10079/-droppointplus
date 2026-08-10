@@ -9,6 +9,33 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-08-10
+
+### Added
+
+- **COPY / MOVE to a chosen destination** — the footer gains **COPY** (filled)
+  and **MOVE** (outline) actions that open a destination picker, so collected
+  files can be transferred without leaving the shelf:
+  - `destination_dialog.py` — the picker lists **FAVORITES** (Desktop /
+    Downloads / Documents / Pictures + user-pinned folders) and **RECENT**
+    destinations, filters them live as you type, accepts a typed folder
+    path directly, and offers a Browse… chooser.
+  - `TransferWorker` (QThread) — copy and move run off the UI thread with
+    byte-level progress (`done / total`), live speed and ETA; duplicates at
+    the destination are auto-renamed (`file (1).ext`), never overwritten.
+  - The shelf shows a progress overlay (bar + detail line + **Cancel**),
+    then a success panel with **Open destination** / **Done**.
+  - Favourites and recent destinations persist in the config
+    (`favorites`, `recent_destinations` keys).
+  - Cancel is cooperative: completed items stay transferred, the rest stay
+    in the collection.
+
+### Fixed
+
+- Scrolled collection rows painted over the `COLLECTION / N items` header and
+  the bottom hint: rows now live in a masked viewport clipped to the band
+  between the two labels.
+
 ## [0.1.1] - 2026-08-10
 
 ### Fixed

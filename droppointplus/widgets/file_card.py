@@ -36,6 +36,14 @@ _CARD_STYLE = (
 )
 
 
+def format_bytes(n: int) -> str:
+    """Human-readable byte count (``12.4 MB``)."""
+    for unit, divisor in (("GB", 1024**3), ("MB", 1024**2), ("KB", 1024)):
+        if n >= divisor:
+            return f"{n / divisor:.1f} {unit}"
+    return f"{n} B"
+
+
 def format_size(path: Path) -> str:
     """Human-readable file size (``12.4 MB``); ``''`` when it can't be read.
 
@@ -47,10 +55,7 @@ def format_size(path: Path) -> str:
     except OSError:
         logger.warning("could not stat %s for size display", path, exc_info=True)
         return ""
-    for unit, divisor in (("GB", 1024**3), ("MB", 1024**2), ("KB", 1024)):
-        if size >= divisor:
-            return f"{size / divisor:.1f} {unit}"
-    return f"{size} B"
+    return format_bytes(size)
 
 
 class FileCard(QFrame):

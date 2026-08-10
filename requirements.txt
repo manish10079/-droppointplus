@@ -1,0 +1,15 @@
+# DropPoint+ runtime dependencies
+#
+# NOTE (Python 3.14): PySide6 6.8+ publishes cp314 wheels, so on 3.14 pip
+# resolves the latest 6.x line automatically (verified: 6.11.1). If a wheel
+# can never be resolved for your interpreter, use a 3.12/3.13 venv instead.
+#
+# Global hotkey: implemented natively via ctypes RegisterHotKey + Qt's
+# QAbstractNativeEventFilter (see droppointplus/hotkey.py) — no extra
+# dependency needed.
+PySide6>=6.8
+
+# --- dev / packaging -------------------------------------------------------
+pyinstaller>=6.6
+pytest>=8.0
+pytest-qt>=4.4

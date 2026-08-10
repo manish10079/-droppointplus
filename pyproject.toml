@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "droppointplus"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Drag-and-drop shelf — PySide6 rebuild of the DropPoint Electron app"
 readme = "README.md"
 license = { text = "GPL-3.0-or-later" }
@@ -22,6 +22,10 @@ dev = [
 
 [project.scripts]
 droppointplus = "droppointplus.main:main"
+
+[tool.setuptools.dynamic]
+# Single source of truth: droppointplus/__init__.py.__version__
+version = { attr = "droppointplus.__version__" }
 
 [tool.setuptools]
 packages = ["droppointplus", "droppointplus.widgets"]

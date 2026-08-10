@@ -68,6 +68,10 @@ kept asking for.
 - **Settings gear right on the shelf**, plus a schema-driven Settings dialog:
   spawn on launch, always on top, open at cursor, shortcut behaviour, drag
   action, debug
+- **Collection list view** — the holding state becomes a `COLLECTION / N
+  items` roster: per-row type icon, name, size, and **✕ remove**; scrolls
+  with wheel or touchpad once it overflows
+- **Clear all** button in the footer (and `Esc`) to empty the shelf
 - Per-file-type icons, dark Material-inspired theme with all colors
   centralized in `colors.py`
 - Clean **MVVM** architecture: `View → ViewModel → Service`, dependency
@@ -125,6 +129,21 @@ droppointplus/
 The full migration plan (Electron → Qt6) lives in
 [`MIGRATION_PLAN.md`](MIGRATION_PLAN.md). The original Electron codebase is
 kept at `../Droppoint-old/` as the behavioural reference.
+
+## Versioning
+
+DropPoint+ follows [Semantic Versioning](https://semver.org/) (SemVer):
+`MAJOR.MINOR.PATCH`.
+
+- `MAJOR` — incompatible/breaking changes
+- `MINOR` — backwards-compatible features
+- `PATCH` — backwards-compatible fixes
+
+Releases are tagged `vX.Y.Z` in git and listed in
+[`CHANGELOG.md`](CHANGELOG.md) (Keep a Changelog format). The canonical
+version is the `__version__` attribute in `droppointplus/__init__.py`;
+`pyproject.toml` reads it dynamically, so there is exactly one place to
+bump.
 
 ---
 

@@ -146,6 +146,15 @@ class ShelfViewModel(QObject):
         self.close_requested.emit()
         worker.deleteLater()
 
+    def remove_item(self, item: FileItem) -> None:
+        """Remove one collected item (the View's per-row ✕)."""
+        if self.is_working or item not in self._files:
+            return
+        self._files.remove(item)
+        # Keep the persisted snapshot in step with the shelf contents.
+        self._service.record_drop(self._instance_id, self._files)
+        self.files_changed.emit(self._instance_id, list(self._files))
+
     def clear(self) -> None:
         """Discard the collected files (Esc in the View)."""
         if not self._files or self.is_working:

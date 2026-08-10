@@ -5,8 +5,8 @@ with the shelf renderer (``renderer/droppoint.js`` + ``static/index.html``).
 
 Per the development skills, this widget is presentation-only:
 
-* it renders the state exposed by the ``ShelfViewModel`` (file count, icon
-  stack, status text) and forwards raw input (drag events, mouse, keys);
+* it renders the state exposed by the ``ShelfViewModel`` (file count, the
+  COLLECTION roster) and forwards raw input (drag events, mouse, keys);
 * every decision ("WHAT should happen") lives in the ``ShelfViewModel``,
   which delegates the mechanics ("HOW") to the ``FileService``;
 * window framing, animations and positioning remain view concerns.
@@ -44,9 +44,8 @@ from PySide6.QtGui import (
 from PySide6.QtWidgets import QLabel, QWidget
 
 from . import colors
-from .icons import file_type_icon
 from .shelf_view_model import ShelfViewModel
-from .widgets import ProgressWidget
+from .widgets import FileList, ProgressWidget
 
 logger = logging.getLogger(__name__)
 
@@ -60,7 +59,6 @@ WINDOW_H = CONTENT_H + 2 * SHADOW_MARGIN
 HEADER_H = 56            # top bar: brand + settings/close
 FOOTER_H = 48            # bottom bar: collected-item count
 DROP_PAD = 24            # padding inside the dashed drop zone
-ICON_SIZE = 64           # file-type icons in the holding stack
 CIRCLE_SIZE = 80         # empty-state icon circle
 DRAG_START_THRESHOLD_PX = 8
 
@@ -71,9 +69,6 @@ DROP_RECT = QRectF(
     CONTENT_W - 2 * DROP_PAD,
     CONTENT_H - HEADER_H - FOOTER_H - 2 * DROP_PAD,
 )
-
-# Stack offsets for the up-to-3 file icons (newest on top).
-_STACK_OFFSETS = [(0, 0), (-16, -8), (16, 8)]
 
 _HEADER_BTN_STYLE = (
     f"QLabel {{ color: {colors.rgba(colors.ON_SURFACE_VARIANT)};"
@@ -121,6 +116,33 @@ class _HeaderButton(QLabel):
         # still running. Calling super() afterwards would touch a deleted
         # C++ object ("Internal C++ object already deleted"). The event
         # object itself is not owned by the widget, so accept() stays safe.
+        if event.button() == Qt.LeftButton:
+            self.clicked.emit()
+        event.accept()
+
+
+class _TextButton(QLabel):
+    """Small text button (footer "Clear all"). Same lifetime-safe pattern
+    as ``_HeaderButton``: emit LAST, then consume the event — never touch
+    the widget after an emit that could destroy it.
+    """
+
+    clicked = Signal()
+
+    def __init__(self, text: str, parent: QWidget):
+        super().__init__(text, parent)
+        self.setAlignment(Qt.AlignCenter)
+        self.setCursor(Qt.PointingHandCursor)
+        self.setAttribute(Qt.WA_Hover, True)
+        self.setStyleSheet(
+            f"QLabel {{ color: {colors.rgba(colors.TEXT_SECONDARY)};"
+            " font-size: 12px; font-weight: 600; border-radius: 13px; }"
+            f"QLabel:hover {{ color: {colors.rgba(colors.TEXT_PRIMARY)};"
+            f" background-color:"
+            f" {colors.rgba(colors.SURFACE_CONTAINER_HIGH)}; }}"
+        )
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton:
             self.clicked.emit()
         event.accept()
@@ -236,37 +258,31 @@ class ShelfWindow(QWidget):
         )
 
         self._hint = QLabel(
-            "Files stay here until you're ready to move or copy them.", self
+            "Files stay here until you're\nready to move or copy them.", self
         )
         self._hint.setAlignment(Qt.AlignCenter)
-        self._hint.setWordWrap(True)
         self._hint.setGeometry(
             SHADOW_MARGIN + 16,
             round(DROP_RECT.bottom()) - 42,
             CONTENT_W - 32,
-            30,
+            36,
         )
         self._hint.setStyleSheet(
             f"color: {colors.rgba(colors.TEXT_SECONDARY)}; font-size: 13px;"
         )
 
-        # --- holding state ------------------------------------------------
-        self._status = QLabel(self)
-        self._status.setAlignment(Qt.AlignCenter)
-        self._status.setGeometry(
-            SHADOW_MARGIN,
-            round(DROP_RECT.y()) + 78 + ICON_SIZE + 26,
-            CONTENT_W,
-            30,
+        # --- holding state: scrollable COLLECTION roster -------------------
+        # Rows forward remove_requested -> ViewModel.remove_item; presses on
+        # row bodies fall through to the window (drag-out / window move).
+        self._file_list = FileList(self)
+        self._file_list.setGeometry(
+            round(DROP_RECT.x()) + 10,
+            round(DROP_RECT.y()) + 8,
+            round(DROP_RECT.width()) - 20,
+            round(DROP_RECT.height()) - 16,
         )
-        self._status.setStyleSheet(
-            f"color: {colors.rgba(colors.TEXT_PRIMARY)};"
-            " font-size: 18px; font-weight: 600;"
-        )
-
-        self._icon_labels = [QLabel(self) for _ in range(3)]
-        for label in self._icon_labels:
-            label.setAlignment(Qt.AlignCenter)
+        self._file_list.remove_requested.connect(self._vm.remove_item)
+        self._file_list.hide()
 
         # --- footer -------------------------------------------------------
         self._items_label = QLabel("0 items", self)
@@ -277,6 +293,18 @@ class ShelfWindow(QWidget):
             f"color: {colors.rgba(colors.TEXT_SECONDARY)};"
             " font-size: 12px; font-weight: 500;"
         )
+
+        # "Clear all" — visible only while files are held; forwards to the
+        # ViewModel command (Esc does the same).
+        self._btn_clear = _TextButton("Clear all", self)
+        self._btn_clear.setGeometry(
+            SHADOW_MARGIN + CONTENT_W - 100,
+            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
+            76,
+            26,
+        )
+        self._btn_clear.clicked.connect(self._vm.clear)
+        self._btn_clear.hide()
 
         # --- move-mode progress overlay -----------------------------------
         self._progress = ProgressWidget(self)
@@ -308,33 +336,12 @@ class ShelfWindow(QWidget):
         empty_visible = not holding and not self._vm.is_working
         for widget in (self._circle, self._title, self._subtitle, self._hint):
             widget.setVisible(empty_visible)
-        self._status.setVisible(holding)
+        self._file_list.setVisible(holding)
+        self._btn_clear.setVisible(holding)
         self._items_label.setText(f"{n} item{'s' if n != 1 else ''}")
-
-        if holding:
-            self._status.setText(f"Drag Your {n} File{'s' if n != 1 else ''} Out")
-            files = self._vm.files
-            base_x = SHADOW_MARGIN + CONTENT_W // 2 - ICON_SIZE // 2
-            base_y = round(DROP_RECT.y()) + 78
-            for i, label in enumerate(self._icon_labels):
-                if i >= n:
-                    label.hide()
-                    continue
-                dx, dy = _STACK_OFFSETS[i]
-                label.move(base_x + dx, base_y + dy)
-                label.resize(ICON_SIZE, ICON_SIZE)
-                # files[-1] is the most recent drop -> front of the stack.
-                file_type = files[-(i + 1)].file_type
-                label.setPixmap(
-                    file_type_icon(file_type, ICON_SIZE).pixmap(
-                        ICON_SIZE, ICON_SIZE
-                    )
-                )
-                label.show()
-                label.raise_()
-        else:
-            for label in self._icon_labels:
-                label.hide()
+        # Sync unconditionally (a no-op when the roster is unchanged) so the
+        # list never keeps stale rows after clear/remove.
+        self._file_list.set_items(self._vm.files)
         self.update()
 
     # ----------------------------------------------------------- positioning
@@ -473,13 +480,12 @@ class ShelfWindow(QWidget):
             self._title,
             self._subtitle,
             self._hint,
-            self._status,
+            self._file_list,
         ):
             widget.hide()
-        for label in self._icon_labels:
-            label.hide()
         self._btn_settings.hide()
         self._btn_close.hide()
+        self._btn_clear.hide()
         self.setAcceptDrops(False)
         self.update()
 

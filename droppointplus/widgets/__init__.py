@@ -12,6 +12,7 @@ The skills doc names these ``DropZone.py`` / ``FileCard.py`` /
 
 from .drop_zone import DropZone
 from .file_card import FileCard
+from .file_list import FileList
 from .progress_widget import ProgressWidget
 
-__all__ = ["DropZone", "FileCard", "ProgressWidget"]
+__all__ = ["DropZone", "FileCard", "FileList", "ProgressWidget"]

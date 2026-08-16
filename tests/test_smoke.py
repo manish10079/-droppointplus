@@ -23,11 +23,25 @@ from droppointplus.tray import TrayIcon
 from droppointplus.windows import WindowManager
 
 
+_APP: QApplication | None = None
+
+
 def _app() -> QApplication:
-    app = QApplication.instance() or QApplication([])
-    app.setApplicationName("DropPoint+")
-    app.setQuitOnLastWindowClosed(False)
-    return app
+    """Return the process-wide QApplication, keeping a strong reference.
+
+    Holding ``_APP`` at module level is deliberate: if the local reference
+    in a test is the only one, CPython can garbage-collect the QApplication
+    between tests. The next test then calls ``QApplication.instance()``,
+    gets ``None``, and constructs a second QApplication — which Qt aborts
+    with "already a QApplication instance exists" (seen as a pytest
+    internal error, flaky on Linux).
+    """
+    global _APP
+    if _APP is None:
+        _APP = QApplication.instance() or QApplication([])
+        _APP.setApplicationName("DropPoint+")
+        _APP.setQuitOnLastWindowClosed(False)
+    return _APP
 
 
 def test_window_manager_spawns_and_closes() -> None:

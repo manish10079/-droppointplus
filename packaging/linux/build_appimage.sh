@@ -56,5 +56,9 @@ if [[ -z "$APPIMAGE_TOOL" || ! -x "$APPIMAGE_TOOL" ]]; then
     APPIMAGE_TOOL="dist/appimagetool"
 fi
 
+# appimagetool is itself an AppImage; GitHub Actions runners (and other
+# containers) have no FUSE, so run it in extract-and-run mode.
+export APPIMAGE_EXTRACT_AND_RUN=1
+
 ARCH=x86_64 "$APPIMAGE_TOOL" "$APPDIR" "dist/${APP_NAME}-x86_64.AppImage"
 echo "done: dist/${APP_NAME}-x86_64.AppImage"

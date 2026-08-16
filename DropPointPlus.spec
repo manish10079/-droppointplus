@@ -26,13 +26,13 @@ ROOT = Path(SPECPATH)  # directory containing this spec file
 PKG = ROOT / "droppointplus"
 ICON_DIR = PKG / "resources" / "icons"
 
-# Platform icon: .ico on Windows, .icns on macOS (falls back to .png), .png on Linux.
+# Platform icon: EXE icon is a Windows-only feature; on macOS the .app
+# bundle gets an .icns (generated from the PNGs by the CI workflow) and
+# Linux uses the default.
 if sys.platform == "win32":
     exe_icon = str(ICON_DIR / "droppoint.ico")
-elif sys.platform == "darwin":
-    exe_icon = str(ICON_DIR / "pngLogo" / "droppoint.png")
 else:
-    exe_icon = str(ICON_DIR / "pngLogo" / "droppoint.png")
+    exe_icon = None
 
 a = Analysis(
     [str(ROOT / "launcher.py")],
@@ -80,10 +80,14 @@ coll = COLLECT(
 
 if sys.platform == "darwin":
     # macOS gets a proper .app bundle (draggable into /Applications).
+    # The .icns is generated from the PNGs by CI (iconutil); without it
+    # PyInstaller falls back to the generic app icon.
+    icns = ICON_DIR / "droppoint.icns"
+    bundle_icon = str(icns) if icns.exists() else None
     app = BUNDLE(
         coll,
         name="DropPointPlus.app",
-        icon=str(ICON_DIR / "pngLogo" / "droppoint.png"),
+        icon=bundle_icon,
         bundle_identifier="com.droppointplus.app",
         info_plist={
             "CFBundleName": "DropPoint+",

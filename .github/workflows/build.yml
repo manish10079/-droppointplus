@@ -52,14 +52,30 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+      - name: Generate macOS .icns from PNGs
+        if: runner.os == 'macOS'
+        run: |
+          mkdir -p droppointplus/resources/icons/droppoint.iconset
+          for s in 16 32 128 256 512; do
+            sips -z $s $s droppointplus/resources/icons/pngLogo/droppoint.png \
+              --out droppointplus/resources/icons/droppoint.iconset/icon_${s}x${s}.png
+            sips -z $((s*2)) $((s*2)) droppointplus/resources/icons/pngLogo/droppoint.png \
+              --out droppointplus/resources/icons/droppoint.iconset/icon_${s}x${s}@2x.png
+          done
+          iconutil -c icns droppointplus/resources/icons/droppoint.iconset \
+            -o droppointplus/resources/icons/droppoint.icns
+          ls -la droppointplus/resources/icons/droppoint.icns
       - name: PyInstaller build (spec)
         run: pyinstaller --noconfirm DropPointPlus.spec
 
       - name: Build Windows installer (NSIS)
         if: runner.os == 'Windows'
+        shell: powershell
         working-directory: packaging/windows
         run: |
           choco install nsis -y --no-progress
+          # Refresh PATH for this session so makensis resolves.
+          $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
           makensis /V2 installer.nsi
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'

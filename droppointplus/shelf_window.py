@@ -102,19 +102,41 @@ def _download_icon(size: int = 40) -> QPixmap:
     return pm
 
 
+def _history_icon(size: int = 16) -> QPixmap:
+    """Clock glyph for the header History button (a simple drawn clock)."""
+    pm = QPixmap(size, size)
+    pm.fill(Qt.transparent)
+    painter = QPainter(pm)
+    painter.setRenderHint(QPainter.Antialiasing)
+    pen = QPen(
+        colors.ON_SURFACE_VARIANT, 1.6, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin
+    )
+    painter.setPen(pen)
+    cx = cy = size / 2
+    painter.drawEllipse(QPointF(cx, cy), size / 2 - 1, size / 2 - 1)
+    painter.drawLine(QPointF(cx, cy), QPointF(cx, cy - size / 2 + 3.5))   # hour
+    painter.drawLine(QPointF(cx, cy), QPointF(cx + size / 2 - 3.5, cy))   # min
+    painter.end()
+    return pm
+
+
 class _HeaderButton(QLabel):
-    """Small round header icon button (settings gear / close)."""
+    """Small round header icon button (settings gear / history / close)."""
 
     clicked = Signal()
 
-    def __init__(self, glyph: str, parent: QWidget):
-        super().__init__(glyph, parent)
+    def __init__(self, glyph: str | QPixmap, parent: QWidget):
+        super().__init__(parent)
         self.setAlignment(Qt.AlignCenter)
         self.setCursor(Qt.PointingHandCursor)
         # QLabel does not enable WA_Hover by default; without it the
         # ``QLabel:hover`` stylesheet rule below never fires.
         self.setAttribute(Qt.WA_Hover, True)
         self.setStyleSheet(_HEADER_BTN_STYLE)
+        if isinstance(glyph, QPixmap):
+            self.setPixmap(glyph)
+        else:
+            self.setText(glyph)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         # Emit LAST and consume the event: the close button's click closes
@@ -179,6 +201,7 @@ class ShelfWindow(QWidget):
 
     closed_signal = Signal(object)   # emits the window itself
     settings_requested = Signal()    # header gear pressed
+    history_requested = Signal()     # header history (clock) pressed
 
     def __init__(
         self,
@@ -236,13 +259,23 @@ class ShelfWindow(QWidget):
             " font-size: 18px; font-weight: 700;"
         )
 
+        # Header actions: history (clock) · settings (gear) · close (✕).
+        self._btn_history = _HeaderButton(_history_icon(), self)
+        self._btn_history.setToolTip("History")
+        self._btn_history.setGeometry(
+            SHADOW_MARGIN + CONTENT_W - 108, SHADOW_MARGIN + 17, 22, 22
+        )
+        self._btn_history.clicked.connect(self.history_requested.emit)
+
         self._btn_settings = _HeaderButton("⚙", self)
+        self._btn_settings.setToolTip("Settings")
         self._btn_settings.setGeometry(
             SHADOW_MARGIN + CONTENT_W - 78, SHADOW_MARGIN + 17, 22, 22
         )
         self._btn_settings.clicked.connect(self.settings_requested.emit)
 
         self._btn_close = _HeaderButton("✕", self)
+        self._btn_close.setToolTip("Close")
         self._btn_close.setGeometry(
             SHADOW_MARGIN + CONTENT_W - 48, SHADOW_MARGIN + 17, 22, 22
         )
@@ -548,6 +581,7 @@ class ShelfWindow(QWidget):
             self._file_list,
         ):
             widget.hide()
+        self._btn_history.hide()
         self._btn_settings.hide()
         self._btn_close.hide()
         self._btn_clear.hide()

@@ -64,11 +64,12 @@ class TransferWorker(QThread):
     """Copies or moves collected items to a destination off the UI thread.
 
     Reports byte-level progress (``progress(done_bytes, total_bytes, speed)``)
-    and one ``item_done`` per finished item so the ViewModel can trim the
-    collection live. ``cancel()`` is cooperative — checked between chunks and
-    items — so the operation stops promptly without corrupting state.
-    Duplicate names at the destination are auto-renamed (``file (1).ext``),
-    never overwritten.
+    at a ~0.5 s cadence while bytes stream (plus a final emit when the
+    operation ends), and one ``item_done`` per finished item so the
+    ViewModel can trim the collection live. ``cancel()`` is cooperative —
+    checked between chunks and items — so the operation stops promptly
+    without corrupting state. Duplicate names at the destination are
+    auto-renamed (``file (1).ext``), never overwritten.
     """
 
     progress = Signal(int, int, float)   # bytes done, bytes total, speed B/s
@@ -93,6 +94,7 @@ class TransferWorker(QThread):
         self._last_bytes = 0
         self._last_t = time.monotonic()
         self._speed = 0.0
+        self._total = 0
 
     # -- api -----------------------------------------------------------------
     @property
@@ -105,6 +107,7 @@ class TransferWorker(QThread):
     # -- worker --------------------------------------------------------------
     def run(self) -> None:
         total = self._total_bytes()
+        self._total = total
         start = time.monotonic()
         for item in self._items:
             if self._cancelled:
@@ -147,7 +150,10 @@ class TransferWorker(QThread):
             else:
                 self._copy_file(item.path, dest)
         else:
+            # Size is read *before* the move — after it, the source is gone.
+            size = self._size_of(item.path)
             shutil.move(str(item.path), str(dest))
+            self._bump(size)
 
     def _unique_dest(self, name: str) -> Path:
         candidate = self._destination / name
@@ -189,6 +195,7 @@ class TransferWorker(QThread):
             self._speed = inst if not self._speed else self._speed * 0.6 + inst * 0.4
             self._last_t = now
             self._last_bytes = self._done_bytes
+            self.progress.emit(self._done_bytes, self._total, self._speed)
 
 
 class FileService:

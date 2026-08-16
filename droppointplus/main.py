@@ -16,6 +16,7 @@ import sys
 from PySide6.QtWidgets import QApplication
 
 from .app_config import ConfigManager
+from .history_window import HistoryWindow
 from .hotkey import HotkeyManager
 from .settings_dialog import SettingsDialog
 from .tray import TrayIcon
@@ -40,6 +41,9 @@ def main() -> int:
     windows = WindowManager(
         config,
         open_settings=lambda: SettingsDialog(config).exec(),
+        open_history=lambda: HistoryWindow(
+            always_on_top=bool(config.get("always_on_top"))
+        ).exec(),
     )
 
     tray = TrayIcon(windows, config)

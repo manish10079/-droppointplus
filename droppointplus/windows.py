@@ -34,11 +34,13 @@ class WindowManager(QObject):
         config: ConfigManager,
         parent: QObject | None = None,
         open_settings: Callable[[], None] | None = None,
+        open_history: Callable[[], None] | None = None,
     ):
         super().__init__(parent)
         self._config = config
         self._service = FileService()  # shared, constructor-injected into ViewModels
         self._open_settings = open_settings  # wired to each window's header gear
+        self._open_history = open_history  # wired to each window's header clock
         self._windows: list[ShelfWindow] = []
         self._next_id = int(time.time() * 1000)  # parity with `+new Date()` in Window.js
 
@@ -60,6 +62,8 @@ class WindowManager(QObject):
         view_model.files_changed.connect(self._on_files_changed)
         if self._open_settings is not None:
             window.settings_requested.connect(self._open_settings)
+        if self._open_history is not None:
+            window.history_requested.connect(self._open_history)
         self._windows.append(window)
 
         if self._config.get("open_at_cursor_position"):

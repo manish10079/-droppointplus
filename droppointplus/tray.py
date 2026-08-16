@@ -12,6 +12,7 @@ from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
+from PySide6.QtCore import QTimer
 from PySide6.QtGui import QAction
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
@@ -39,7 +40,13 @@ class TrayIcon(QSystemTrayIcon):
         self._menu.addSeparator()
         self._history_menu = self._menu.addMenu("History")
         self._menu.addSeparator()
-        self._menu.addAction("Quit", QApplication.instance().quit)
+        # Keep an explicit reference: QSystemTrayIcon.setContextMenu() does NOT
+        # take ownership of the menu (nor of actions added via addAction with a
+        # receiver), so a plain QAction would be garbage-collected and Quit
+        # would silently stop working.
+        self._quit_action = QAction("Quit", self._menu)
+        self._quit_action.triggered.connect(self._quit)
+        self._menu.addAction(self._quit_action)
         self.setContextMenu(self._menu)
 
         self.activated.connect(self._on_activated)
@@ -52,6 +59,17 @@ class TrayIcon(QSystemTrayIcon):
     def _open_settings(self) -> None:
         dialog = SettingsDialog(self._config)
         dialog.exec()
+
+    def _quit(self) -> None:
+        """Quit the application.
+
+        The quit is deferred by one event-loop turn: on Windows the tray
+        context menu runs a native (nested) event loop, and calling
+        ``quit()`` synchronously from inside the triggered handler can be
+        swallowed before the main loop sees it. Scheduling it after the
+        menu closes makes the exit deterministic.
+        """
+        QTimer.singleShot(0, QApplication.instance().quit)
 
     def _rebuild_menu(self) -> None:
         """Refresh the History submenu each time the menu is about to open."""

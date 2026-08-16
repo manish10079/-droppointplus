@@ -9,6 +9,38 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-16
+
+### Added
+
+- **Real live transfer progress** — the copy/move worker now emits byte
+  progress every ~0.5 s while bytes stream (plus a final emit), and moves
+  report per-item progress, so the shelf's progress bar, speed and ETA update
+  during the transfer instead of jumping 0 → 100 % at the end.
+- **History window** — a new clock button on the shelf header opens a
+  full History panel listing the last 10 instances and their collected files
+  (the tray's History submenu stays as the quick view).
+- **Shared dark panel chrome** (`widgets/panel_mixin.py`) — the Settings and
+  History windows now use the same frameless, translucent, rounded design as
+  the shelf, with a draggable header and close button.
+- **Settings dialog restyled** to match the shelf design language: dark
+  inputs, purple focus rings, primary Apply button, footer toast.
+- **Phase 4 packaging** — a reproducible PyInstaller spec, a Windows NSIS
+  installer script, a Linux AppImage build script, a GitHub Actions matrix
+  (test + build on Windows/macOS/Linux) and a first pytest smoke suite.
+
+### Fixed
+
+- Settings/History windows opened **below** the always-on-top shelf and were
+  unreachable: the panels now carry `WindowStaysOnTopHint` when "Always on
+  top" is enabled (and respect it when disabled).
+- **Tray Quit did nothing**: the Quit action is now kept by an explicit
+  reference (`setContextMenu` takes no ownership) and the quit is deferred
+  one event-loop turn so the native Windows tray menu cannot swallow it.
+- **Packaged exe failed to boot** with `attempted relative import with no
+  known parent package`: a root `launcher.py` entry point imports the package
+  absolutely, and the PyInstaller spec uses it.
+
 ## [0.2.0] - 2026-08-10
 
 ### Added

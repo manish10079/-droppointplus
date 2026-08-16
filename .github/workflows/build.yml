@@ -51,9 +51,10 @@ jobs:
 
       - name: Build Windows installer (NSIS)
         if: runner.os == 'Windows'
+        working-directory: packaging/windows
         run: |
           choco install nsis -y --no-progress
-          makensis /V2 packaging/windows/installer.nsi
+          makensis /V2 installer.nsi
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4
@@ -61,7 +62,7 @@ jobs:
           name: DropPointPlus-windows
           path: |
             dist/DropPointPlus/
-            DropPointPlus-Setup-*.exe
+            packaging/windows/DropPointPlus-Setup-*.exe
 
       - name: Package macOS dmg
         if: runner.os == 'macOS'
@@ -89,3 +90,32 @@ jobs:
           path: |
             dist/DropPointPlus/
             dist/DropPointPlus-x86_64.AppImage
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: DropPointPlus-windows
+          path: release/windows
+      - uses: actions/download-artifact@v4
+        with:
+          name: DropPointPlus-macos
+          path: release/macos
+      - uses: actions/download-artifact@v4
+        with:
+          name: DropPointPlus-linux
+          path: release/linux
+      - name: Publish installers to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            release/windows/**/DropPointPlus-Setup-*.exe
+            release/macos/**/*.dmg
+            release/linux/**/*.AppImage
+          generate_release_notes: false

@@ -8,7 +8,7 @@
 !define APPNAME "DropPoint+"
 !define COMPANYNAME "DropPointPlus"
 !define DESCRIPTION "Make drag and drop easier — a floating shelf for files"
-!define VERSION "0.2.0"
+!define VERSION "0.3.0"
 !define OUTPUT "DropPointPlus-Setup-${VERSION}.exe"
 
 ; The PyInstaller onedir output to bundle (relative to this script).

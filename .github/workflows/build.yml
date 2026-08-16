@@ -74,9 +74,22 @@ jobs:
         working-directory: packaging/windows
         run: |
           choco install nsis -y --no-progress
-          # Refresh PATH for this session so makensis resolves.
-          $env:Path = [System.Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [System.Environment]::GetEnvironmentVariable('Path', 'User')
-          makensis /V2 installer.nsi
+          # choco's NSIS package puts makensis under Program Files and does not
+          # reliably add it to PATH, so locate it explicitly (falling back to
+          # the 32-bit dir and a plain PATH lookup).
+          $candidates = @(
+            "${env:ProgramFiles(x86)}\NSIS\makensis.exe",
+            "$env:ProgramFiles\NSIS\makensis.exe",
+            (Get-Command makensis -ErrorAction SilentlyContinue).Source
+          )
+          $makensis = $candidates | Where-Object { $_ -and (Test-Path $_) } | Select-Object -First 1
+          if (-not $makensis) {
+            Write-Error "makensis.exe not found. Tried: $($candidates -join ', ')"
+            exit 1
+          }
+          Write-Host "using makensis: $makensis"
+          & $makensis /V2 installer.nsi
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       - name: Upload Windows artifacts
         if: runner.os == 'Windows'
         uses: actions/upload-artifact@v4

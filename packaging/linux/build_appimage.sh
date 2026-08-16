@@ -12,6 +12,9 @@ set -euo pipefail
 cd "$(dirname "$0")/../.."   # project root
 
 APP_NAME="DropPoint+"
+# The AppImage filename must match the workflow's upload glob
+# (dist/DropPointPlus-x86_64.AppImage).
+APPIMAGE_NAME="DropPointPlus-x86_64.AppImage"
 BUNDLE="dist/DropPointPlus"
 APPDIR="dist/AppDir"
 APPIMAGE_TOOL="${APPIMAGETOOL:-}"
@@ -60,5 +63,5 @@ fi
 # containers) have no FUSE, so run it in extract-and-run mode.
 export APPIMAGE_EXTRACT_AND_RUN=1
 
-ARCH=x86_64 "$APPIMAGE_TOOL" "$APPDIR" "dist/${APP_NAME}-x86_64.AppImage"
-echo "done: dist/${APP_NAME}-x86_64.AppImage"
+ARCH=x86_64 "$APPIMAGE_TOOL" "$APPDIR" "dist/${APPIMAGE_NAME}"
+echo "done: dist/${APPIMAGE_NAME}"

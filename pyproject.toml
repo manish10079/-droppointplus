@@ -27,6 +27,10 @@ droppointplus = "droppointplus.main:main"
 # Single source of truth: droppointplus/__init__.py.__version__
 version = { attr = "droppointplus.__version__" }
 
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+
 [tool.setuptools]
 packages = ["droppointplus", "droppointplus.widgets"]
 

@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=DropPoint+
+Comment=Make drag and drop easier — a floating shelf for files
+Exec=DropPointPlus
+Icon=droppoint
+Terminal=false
+Categories=Utility;
+StartupNotify=false

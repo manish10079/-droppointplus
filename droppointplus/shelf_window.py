@@ -803,6 +803,22 @@ class ShelfWindow(QWidget):
             painter.drawLine(QPointF(rect.left() + 12, y),
                              QPointF(rect.right() - 12, y))
 
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        # The marching border runs while visible only: an infinite animation
+        # must never keep ticking on a hidden or closed window (it would burn
+        # CPU for the app's auto-hidden shelves and can outlive the widget at
+        # teardown). The state guard makes the initial start in _build_ui and
+        # re-shows idempotent.
+        if self._dash_anim.state() != QAbstractAnimation.State.Running:
+            self._dash_anim.start()
+
+    def hideEvent(self, event) -> None:
+        self._dash_anim.stop()
+        super().hideEvent(event)
+
     def closeEvent(self, event) -> None:
+        self._border_anim.stop()
+        self._dash_anim.stop()
         self.closed_signal.emit(self)
         super().closeEvent(event)

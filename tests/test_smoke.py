@@ -13,6 +13,7 @@ import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
 
+import pytest
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 
@@ -24,6 +25,21 @@ from droppointplus.windows import WindowManager
 
 
 _APP: QApplication | None = None
+
+
+@pytest.fixture(autouse=True)
+def _flush_qt_events():
+    """Flush deferred deletions and posted events after every test.
+
+    Guards the historic flaky Ubuntu teardown: a widget closed in one test
+    keeps its C++ peer alive until deleteLater/close events are processed, and
+    those can land mid-way through the next test — surfacing as an intermittent
+    pytest internal error on the timing-sensitive Linux runner.
+    """
+    yield
+    app = QApplication.instance()
+    if app is not None:
+        app.processEvents()
 
 
 def _app() -> QApplication:

@@ -11,6 +11,15 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [0.4.0] - 2026-08-17
 
+### Fixed
+
+- The marching drop-zone border animation now stops when a shelf is hidden
+  or closed and restarts on show, so no infinite animation timer outlives
+  the window — saves CPU on auto-hidden shelves and removes a teardown-crash
+  source.
+- Smoke tests flush Qt's deferred deletions after every test, guarding the
+  historic flaky Ubuntu CI teardown.
+
 ### Added
 
 - **Summon-on-drag** — the shelf now appears automatically while you drag

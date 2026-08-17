@@ -69,6 +69,14 @@ DROP_PAD = 24            # padding inside the dashed drop zone
 CIRCLE_SIZE = 80         # empty-state icon circle
 DRAG_START_THRESHOLD_PX = 8
 
+# Dashed drop-zone border: a custom pattern whose offset is animated so the
+# dashes march around the drop zone (marching-ants). The cycle durations give
+# a gentle drift while idle and a lively one while a drag hovers.
+DASH_PATTERN = (6.0, 4.0)
+DASH_PERIOD = float(sum(DASH_PATTERN))
+DASH_CYCLE_IDLE_MS = 3000
+DASH_CYCLE_ACTIVE_MS = 800
+
 # The dashed drop zone (painted border + child-widget layout bounds).
 DROP_RECT = QRectF(
     SHADOW_MARGIN + DROP_PAD,
@@ -435,6 +443,19 @@ class ShelfWindow(QWidget):
         self._border_anim.setEasingCurve(QEasingCurve.InOutSine)
         self._border_anim.valueChanged.connect(self.update)
 
+        # Marching-ants border: the dash pattern offset drifts continuously
+        # so the dashes appear to travel around the drop zone (runs for the
+        # life of the shelf; a drag-over speeds it up).
+        self._dash_anim = QVariantAnimation(self)
+        self._dash_anim.setStartValue(0.0)
+        self._dash_anim.setEndValue(DASH_PERIOD)
+        self._dash_anim.setDuration(DASH_CYCLE_IDLE_MS)
+        self._dash_anim.setLoopCount(-1)
+        self._dash_anim.setEasingCurve(QEasingCurve.Linear)
+        self._dash_anim.valueChanged.connect(self._on_dash_tick)
+        self._last_dash_step = -1
+        self._dash_anim.start()
+
     def _refresh_ui(self, *_args) -> None:
         n = self._vm.count
         holding = n > 0
@@ -452,6 +473,32 @@ class ShelfWindow(QWidget):
         self.update()
 
     # ----------------------------------------------------------- positioning
+    @property
+    def view_model(self) -> ShelfViewModel:
+        """The VM this window renders (exposed for the window manager)."""
+        return self._vm
+
+    def position_at_edge(self, edge: str, area) -> None:
+        """Dock the shelf next to a screen edge (drag-summon).
+
+        ``edge`` is "top"/"bottom"/"left"/"right"; ``area`` is the screen's
+        available geometry the strip belongs to. The shelf is centred along
+        the edge and clamped inside the screen.
+        """
+        x = area.center().x() - CONTENT_W // 2
+        y = area.center().y() - CONTENT_H // 2
+        if edge == "top":
+            y = area.top()
+        elif edge == "bottom":
+            y = area.bottom() - CONTENT_H + 1
+        elif edge == "left":
+            x = area.left()
+        else:  # right
+            x = area.right() - CONTENT_W + 1
+        x = max(area.left(), min(x, area.right() - CONTENT_W))
+        y = max(area.top(), min(y, area.bottom() - CONTENT_H))
+        self.move(x, y)
+
     def position_at_cursor(self) -> None:
         """Open just above the cursor, clamped to the screen (Window.js parity)."""
         pos = QCursor.pos()
@@ -677,12 +724,26 @@ class ShelfWindow(QWidget):
             QDesktopServices.openUrl(QUrl.fromLocalFile(self._transfer_dest))
         self._finish_transfer_ui()
 
+    def _on_dash_tick(self, value: float) -> None:
+        """Repaint only when the marching offset crossed a 0.5 px step.
+
+        QVariantAnimation ticks at ~60 Hz, but the border only needs a few
+        repaints per cycle segment — quantizing keeps an idle shelf's
+        repaints in the low single digits per second.
+        """
+        step = round(float(value) * 2) / 2
+        if step != self._last_dash_step:
+            self._last_dash_step = step
+            self.update()
+
     def _start_border_animation(self) -> None:
         if self._border_anim.state() != QAbstractAnimation.State.Running:
             self._border_anim.start()
+        self._dash_anim.setDuration(DASH_CYCLE_ACTIVE_MS)
 
     def _stop_border_animation(self) -> None:
         self._border_anim.stop()
+        self._dash_anim.setDuration(DASH_CYCLE_IDLE_MS)
 
     def paintEvent(self, event: QPaintEvent) -> None:
         painter = QPainter(self)
@@ -727,6 +788,10 @@ class ShelfWindow(QWidget):
             painter.setBrush(Qt.NoBrush)
             pen_color = colors.BORDER_SUBTLE
         pen = QPen(pen_color, 2, Qt.DashLine)
+        pen.setDashPattern(DASH_PATTERN)
+        # March the dashes around the border: the pattern is periodic, so the
+        # animated offset loops seamlessly (negative = forward motion).
+        pen.setDashOffset(-float(self._dash_anim.currentValue() or 0.0))
         painter.setPen(pen)
         painter.drawRoundedRect(rect, 12, 12)
 

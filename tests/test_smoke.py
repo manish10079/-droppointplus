@@ -93,3 +93,54 @@ def test_tray_quit_action_is_wired() -> None:
     assert tray._quit_action is not None
     assert tray._quit_action.text() == "Quit"
     tray.hide()
+
+
+def test_show_on_drag_config_key_exists() -> None:
+    from droppointplus.app_config import CONFIG_SCHEMA, DEFAULT_CONFIG
+
+    assert CONFIG_SCHEMA["show_on_drag"]["type"] == "boolean"
+    assert DEFAULT_CONFIG["show_on_drag"] is True
+
+
+def test_edge_strip_builds() -> None:
+    _app()
+    from PySide6.QtCore import QRect
+    from droppointplus.drag_detect import EdgeStrip
+
+    strip = EdgeStrip("top", QRect(0, 0, 1920, 1040))
+    assert strip.acceptDrops()
+    assert strip.width() == 1920 and strip.height() == EdgeStrip.THICKNESS
+    strip.close()
+
+
+def test_summon_reuses_and_auto_hides() -> None:
+    """Drag-summon spawns a shelf at the edge, reuses it on the next drag,
+    and auto-hides an empty one without dropping it from the registry."""
+    _app()
+    from PySide6.QtCore import QRect
+
+    windows = WindowManager(ConfigManager())
+    area = QRect(0, 0, 1920, 1040)
+
+    windows._summon_at_edge("top", area)
+    assert windows.count == 1
+    first = windows.windows[0]
+    assert first.isVisible()
+    assert first.y() == area.top()
+
+    # A second summon reuses the same (idle, empty) instance.
+    windows._summon_at_edge("right", area)
+    assert windows.count == 1
+    assert windows.windows[0] is first
+
+    # Drag ends: the shelf hides quickly, then closes completely ~1 s later
+    # (no hidden instance lingers in the registry).
+    from PySide6.QtCore import QEventLoop, QTimer
+
+    windows._schedule_auto_hide()
+    loop = QEventLoop()
+    QTimer.singleShot(1200, loop.quit)
+    loop.exec()
+    assert windows.count == 0
+
+    windows._disable_drag_summon()

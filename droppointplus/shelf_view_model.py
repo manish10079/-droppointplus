@@ -9,9 +9,9 @@ logic.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Sequence
 
-from PySide6.QtCore import QObject, Qt, Signal
+from PySide6.QtCore import QObject, Qt, QUrl, Signal
 
 from .app_config import ConfigManager
 from .file_service import DeleteWorker, FileService, TransferWorker
@@ -83,13 +83,28 @@ class ShelfViewModel(QObject):
     def handle_drop(self, event) -> int:
         """Collect dropped files into the shelf; returns the number added.
 
-        Deduplicates against the current contents and persists the snapshot
-        to the instance history when something new arrived. All drag
-        mechanics (mime parsing) live in the FileService.
+        All drag mechanics (mime parsing) live in the FileService; the
+        collected paths are added through :meth:`add_paths` so a drop that
+        lands on a screen-edge strip collects identically.
         """
         if self.is_working:
             return 0
-        incoming = self._service.items_from_drop(event)
+        return self.add_paths(
+            [u.toLocalFile() for u in event.mimeData().urls()]
+        )
+
+    def add_paths(self, paths: Sequence[str]) -> int:
+        """Collect the given file paths; returns the number added.
+
+        Deduplicates against the current contents and persists the snapshot
+        to the instance history when something new arrived. Used by drag-in
+        and by the ``EdgeStrip`` when files are dropped onto a screen edge.
+        """
+        if self.is_working:
+            return 0
+        incoming = self._service.urls_to_items(
+            [QUrl.fromLocalFile(p) for p in paths if p]
+        )
         fresh = [item for item in incoming if item not in self._files]
         if not fresh:
             return 0

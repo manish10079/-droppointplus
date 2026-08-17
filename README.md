@@ -69,6 +69,11 @@ kept asking for.
   move mode deletes sources on a background worker thread with progress
 - **Configurable global hotkey** (`Shift+Capslock` by default on
   Windows/Linux, `Shift+Tab` on macOS) — live-rebinding from Settings
+- **Summon-on-drag** — the shelf appears automatically while you drag files:
+  a Windows global mouse hook catches file drags anywhere and reveals a shelf
+  at the cursor, invisible screen-edge strips dock it when you drag to  the edge (click-through when idle), an existing idle shelf is reused instead of
+  spawning, and when the drag ends it auto-hides and then closes completely a
+  second later. Toggle: **Show shelf when dragging files** in Settings
 - **System tray** — New Instance / Settings / Quit + **History** submenu
   (last 5 drops)
 - **Settings gear right on the shelf**, plus a schema-driven Settings dialog:
@@ -128,6 +133,7 @@ droppointplus/
 ├── windows.py           # WindowManager: instance registry + toggle/spawn
 ├── tray.py              # system tray + History submenu
 ├── hotkey.py            # global hotkey (native Win32 ctypes)
+├── drag_detect.py       # summon-on-drag: global mouse hook + edge strips
 ├── settings_dialog.py   # schema-driven settings
 ├── icons.py             # file-type icons (assets reused from DropPoint)
 ├── history.py           # instance history (re-enabled, fixed path)

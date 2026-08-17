@@ -9,6 +9,34 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-08-17
+
+### Added
+
+- **Summon-on-drag** — the shelf now appears automatically while you drag
+  files, no hotkey or tray click needed:
+  - a Windows global mouse hook (`drag_detect.py`) detects a file drag
+    anywhere on the desktop (left button + movement + a non-standard drag
+    cursor, the signature Explorer/OLE uses) and reveals a shelf at the
+    cursor;
+  - invisible always-on-top **edge strips** on every screen catch file
+    drags at the screen edge and dock the shelf there (a deliberate, 100%
+    reliable gesture; idle strips are click-through on Windows so they never
+    block the screen edge);
+  - the shelf **reuses** an existing idle instance when one exists and only
+    spawns when none does, and after the drag ends it **auto-hides** quickly
+    and then **closes completely** ~1 s later (unless files were dropped into
+    it, in which case it stays open as a normal instance);
+  - dropping directly on an edge strip collects the files like a normal
+    drop;
+  - new **"Show shelf when dragging files"** setting (default on), toggled
+    live from Settings; strips work on macOS/Linux too, the anywhere-detector
+    is Windows-only (no OS mechanism exists on Wayland).
+- **Animated drop-zone border** — the shelf's dashed border now marches
+  around the drop zone (marching-ants style), gently while idle and faster
+  while a drag hovers (the existing purple glow still pulses on drag-over);
+  repaints are quantized so an idle shelf stays cheap.
+
 ## [0.3.0] - 2026-08-16
 
 ### Added

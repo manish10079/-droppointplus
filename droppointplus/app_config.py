@@ -50,6 +50,10 @@ CONFIG_SCHEMA: dict[str, dict] = {
         "title": "Drag-out behaviour",
         "values": ["copy", "move"],
     },
+    "show_on_drag": {
+        "type": "boolean",
+        "title": "Show shelf when dragging files",
+    },
     "shortcut": {
         "type": "string",
         "title": "Global shortcut (e.g. Shift+Capslock)",
@@ -66,6 +70,9 @@ DEFAULT_CONFIG: dict = {
     "open_at_cursor_position": False,
     "shortcut_action": "toggle",
     "drag_action": "copy",
+    # Summon-on-drag: detect file drags anywhere (Windows mouse-hook heuristic)
+    # + screen-edge strips; the shelf appears and auto-hides with the drag.
+    "show_on_drag": True,
     # Platform-adjusted default: Caps Lock is not a modifier on macOS
     # (parity with src/Shortcut.js).
     "shortcut": "Shift+Capslock" if sys.platform != "darwin" else "Shift+Tab",

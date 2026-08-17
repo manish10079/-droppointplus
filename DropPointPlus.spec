@@ -92,7 +92,7 @@ if sys.platform == "darwin":
         info_plist={
             "CFBundleName": "DropPoint+",
             "CFBundleDisplayName": "DropPoint+",
-            "CFBundleShortVersionString": "0.3.0",
+            "CFBundleShortVersionString": "0.4.0",
             "NSHighResolutionCapable": True,
         },
     )

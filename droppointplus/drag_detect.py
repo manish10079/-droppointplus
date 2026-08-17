@@ -264,7 +264,10 @@ class DragDetector(QObject):
                 return
             dx = abs(pt[0] - self._down_pos[0])
             dy = abs(pt[1] - self._down_pos[1])
-            if dx + dy >= DRAG_THRESHOLD_PX and _is_drag_cursor():
+            # If distance exceeds threshold, trigger drag started.
+            # _is_drag_cursor check can be bypassed or used as optional verification
+            # since Windows OLE drag handles vary across Windows builds/scaling modes.
+            if dx + dy >= DRAG_THRESHOLD_PX:
                 self._summoned = True
                 self.drag_started.emit()
 

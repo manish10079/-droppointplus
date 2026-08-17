@@ -9,6 +9,12 @@ Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 
 ## [Unreleased]
 
+## [0.4.1] - 2026-08-17
+
+### Fixed
+
+- **Drag Detection Reliability**: Removed restrictive cursor handle requirement in `DragDetector` on Windows so auto-summoning works consistently across custom mouse themes, high-DPI scaling configurations, and all Windows builds.
+
 ## [0.4.0] - 2026-08-17
 
 ### Fixed

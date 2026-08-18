@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 `droppointplus/__init__.py` (`__version__`).
 
+## [0.5.1] - 2026-08-18
+
+### Fixed
+
+- **Windows installer could not overwrite a running app** — installing or
+  upgrading while DropPoint+ was already running (it auto-starts at login
+  and lives in the tray) failed with NSIS `Error opening file for writing:
+  ...\DropPointPlus.exe`. The installer and uninstaller now detect a running
+  `DropPointPlus.exe`, ask before closing it (installer) or close it
+  silently (uninstaller), then proceed — no more locked-file errors.
+
 ## [0.5.0] - 2026-08-18
 
 ### Added

@@ -34,6 +34,10 @@ WINDOW_W = 380
 WINDOW_H = 460
 _BODY_X = 16
 _BODY_W = WINDOW_W - 2 * _BODY_X
+# Resize bounds: the designed size is the lower limit (rows clip below
+# it); the window may grow to show more history.
+MIN_W, MIN_H = 380, 460
+MAX_W, MAX_H = 700, 800
 
 _SCROLL_QSS = (
     f"QScrollArea {{ border: none; background: transparent; }}"
@@ -55,6 +59,8 @@ class HistoryWindow(PanelMixin, QDialog):
         self._init_panel(
             "History", WINDOW_W, WINDOW_H, parent,
             always_on_top=always_on_top,
+            min_width=MIN_W, min_height=MIN_H,
+            max_width=MAX_W, max_height=MAX_H,
         )
         self.setWindowTitle("History - DropPoint+")
 
@@ -81,6 +87,15 @@ class HistoryWindow(PanelMixin, QDialog):
         )
 
         self._refresh()
+
+    def resizeEvent(self, event) -> None:
+        """Re-lay the scroll area and footer hint to the new size."""
+        super().resizeEvent(event)  # PanelMixin repositions the header chrome
+        w, h = self.width(), self.height()
+        self._scroll.setGeometry(
+            _BODY_X, HEADER_H + 8, w - 2 * _BODY_X, h - HEADER_H - FOOTER_H - 16
+        )
+        self._footer_hint.setGeometry(0, h - FOOTER_H + 8, w, 20)
 
     # -- data --------------------------------------------------------------
     def _refresh(self) -> None:

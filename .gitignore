@@ -8,3 +8,4 @@ build/
 *.spec
 !DropPointPlus.spec
 .pytest_cache/
+packaging/windows/*.exe

@@ -69,6 +69,12 @@ kept asking for.
   move mode deletes sources on a background worker thread with progress
 - **Configurable global hotkey** (`Shift+Capslock` by default on
   Windows/Linux, `Shift+Tab` on macOS) — live-rebinding from Settings
+- **Launch at startup** — DropPoint+ registers itself in the Windows
+  `Run` key (default on) so it starts with your login; toggle it live from
+  Settings, no admin needed
+- **Single instance** — only one process runs (one tray, one global mouse
+  hook); launching the app again opens a shelf in the running instance
+  instead of starting a second copy
 - **Summon-on-drag** — the shelf appears automatically while you drag files:
   a Windows global mouse hook catches file drags anywhere and reveals a shelf
   at the cursor, invisible screen-edge strips dock it when you drag to  the edge (click-through when idle), an existing idle shelf is reused instead of
@@ -77,8 +83,8 @@ kept asking for.
 - **System tray** — New Instance / Settings / Quit + **History** submenu
   (last 5 drops)
 - **Settings gear right on the shelf**, plus a schema-driven Settings dialog:
-  spawn on launch, always on top, open at cursor, shortcut behaviour, drag
-  action, debug
+  spawn on launch, launch at startup, show shelf when dragging, always on
+  top, open at cursor, shortcut behaviour, drag action, debug
 - **Collection list view** — the holding state becomes a `COLLECTION / N
   items` roster: per-row type icon, name, size, and **✕ remove**; scrolls
   with wheel or touchpad once it overflows

@@ -7,7 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 `droppointplus/__init__.py` (`__version__`).
 
-## [Unreleased]
+## [0.5.0] - 2026-08-18
+
+### Added
+
+- **Launch at Windows login** — a new "Launch at startup (Windows login)"
+  setting (default on) registers DropPoint+ in the
+  `HKCU\...\CurrentVersion\Run` key so it starts with your user session;
+  toggling it in Settings applies live, and the entry always points at the
+  current executable. Windows-only for now — the setting persists as a
+  no-op elsewhere.
+- **Single-instance enforcement** — only one DropPoint+ process can run
+  (one tray icon, one global mouse hook). Launching the app again while it
+  is running asks the existing instance to open a shelf and exits without
+  spawning a second copy with its own tray.
+- **Resizable windows** — the shelf (360×450 → 720×900), Settings
+  (600×450 → 900×700) and History (380×460 → 700×800) can now be resized
+  by dragging any edge or corner (frameless windows have no native resize
+  border, so the edges are hit-tested with proper resize cursors). Sizes
+  are clamped between the designed lower limit and a generous maximum;
+  every child (header buttons, drop zone, collection roster, footer,
+  form, scroll area) re-lays to the new size.
 
 ## [0.4.1] - 2026-08-17
 

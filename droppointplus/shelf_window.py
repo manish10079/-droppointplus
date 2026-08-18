@@ -68,6 +68,17 @@ FOOTER_H = 48            # bottom bar: collected-item count
 DROP_PAD = 24            # padding inside the dashed drop zone
 CIRCLE_SIZE = 80         # empty-state icon circle
 DRAG_START_THRESHOLD_PX = 8
+# Resize bounds: the designed 360×450 layout is the lower limit (the footer
+# buttons cannot compress further); the shelf may grow up to 720×900.
+MIN_W, MIN_H = 360, 450
+MAX_W, MAX_H = 720, 900
+RESIZE_MARGIN = 8        # px from an edge that counts as a resize handle
+
+# Edge bitmask for resize hit-testing.
+_EDGE_LEFT = 1
+_EDGE_RIGHT = 2
+_EDGE_TOP = 4
+_EDGE_BOTTOM = 8
 
 # Dashed drop-zone border: a custom pattern whose offset is animated so the
 # dashes march around the drop zone (marching-ants). The cycle durations give
@@ -76,14 +87,6 @@ DASH_PATTERN = (6.0, 4.0)
 DASH_PERIOD = float(sum(DASH_PATTERN))
 DASH_CYCLE_IDLE_MS = 3000
 DASH_CYCLE_ACTIVE_MS = 800
-
-# The dashed drop zone (painted border + child-widget layout bounds).
-DROP_RECT = QRectF(
-    SHADOW_MARGIN + DROP_PAD,
-    SHADOW_MARGIN + HEADER_H + DROP_PAD,
-    CONTENT_W - 2 * DROP_PAD,
-    CONTENT_H - HEADER_H - FOOTER_H - 2 * DROP_PAD,
-)
 
 _HEADER_BTN_STYLE = (
     f"QLabel {{ color: {colors.rgba(colors.ON_SURFACE_VARIANT)};"
@@ -238,8 +241,18 @@ class ShelfWindow(QWidget):
         # Required: drag events are only delivered to widgets that accept
         # drops — without this the whole drag-IN feature never fires.
         self.setAcceptDrops(True)
-        self.setFixedSize(WINDOW_W, WINDOW_H)
+        # Resizable between the designed size (lower limit) and a generous
+        # maximum; the edges are drag-handles (frameless window).
+        self.setMinimumSize(MIN_W, MIN_H)
+        self.setMaximumSize(MAX_W, MAX_H)
+        self.resize(WINDOW_W, WINDOW_H)
+        self.setMouseTracking(True)  # hover edge cursors without a button
         self.setWindowTitle(f"DropPoint+ {instance_id}")
+
+        # Edge-resize state.
+        self._resizing = 0            # edge bitmask being dragged
+        self._resize_geometry = None  # QRect at press
+        self._resize_global = None    # press origin, screen coords
 
         self._build_ui()
         self._vm.files_changed.connect(self._refresh_ui)
@@ -270,34 +283,19 @@ class ShelfWindow(QWidget):
         # Header actions: history (clock) · settings (gear) · close (✕).
         self._btn_history = _HeaderButton(_history_icon(), self)
         self._btn_history.setToolTip("History")
-        self._btn_history.setGeometry(
-            SHADOW_MARGIN + CONTENT_W - 108, SHADOW_MARGIN + 17, 22, 22
-        )
         self._btn_history.clicked.connect(self.history_requested.emit)
 
         self._btn_settings = _HeaderButton("⚙", self)
         self._btn_settings.setToolTip("Settings")
-        self._btn_settings.setGeometry(
-            SHADOW_MARGIN + CONTENT_W - 78, SHADOW_MARGIN + 17, 22, 22
-        )
         self._btn_settings.clicked.connect(self.settings_requested.emit)
 
         self._btn_close = _HeaderButton("✕", self)
         self._btn_close.setToolTip("Close")
-        self._btn_close.setGeometry(
-            SHADOW_MARGIN + CONTENT_W - 48, SHADOW_MARGIN + 17, 22, 22
-        )
         self._btn_close.clicked.connect(self.close)
 
         # --- empty state --------------------------------------------------
         self._circle = QLabel(self)
         self._circle.setAlignment(Qt.AlignCenter)
-        self._circle.setGeometry(
-            SHADOW_MARGIN + CONTENT_W // 2 - CIRCLE_SIZE // 2,
-            round(DROP_RECT.y()) + 44,
-            CIRCLE_SIZE,
-            CIRCLE_SIZE,
-        )
         self._circle.setPixmap(_download_icon(40))
         self._circle.setStyleSheet(
             f"background-color: {colors.rgba(colors.SURFACE_CONTAINER_HIGH)};"
@@ -307,12 +305,6 @@ class ShelfWindow(QWidget):
 
         self._title = QLabel("Drop files here", self)
         self._title.setAlignment(Qt.AlignCenter)
-        self._title.setGeometry(
-            SHADOW_MARGIN,
-            round(DROP_RECT.y()) + 44 + CIRCLE_SIZE + 18,
-            CONTENT_W,
-            34,
-        )
         self._title.setStyleSheet(
             f"color: {colors.rgba(colors.TEXT_PRIMARY)};"
             " font-size: 24px; font-weight: 700;"
@@ -320,12 +312,6 @@ class ShelfWindow(QWidget):
 
         self._subtitle = QLabel("Drop files or folders to collect them", self)
         self._subtitle.setAlignment(Qt.AlignCenter)
-        self._subtitle.setGeometry(
-            SHADOW_MARGIN,
-            round(DROP_RECT.y()) + 44 + CIRCLE_SIZE + 52,
-            CONTENT_W,
-            24,
-        )
         self._subtitle.setStyleSheet(
             f"color: {colors.rgba(colors.ON_SURFACE_VARIANT)};"
             " font-size: 15px; font-weight: 500;"
@@ -335,12 +321,6 @@ class ShelfWindow(QWidget):
             "Files stay here until you're\nready to move or copy them.", self
         )
         self._hint.setAlignment(Qt.AlignCenter)
-        self._hint.setGeometry(
-            SHADOW_MARGIN + 16,
-            round(DROP_RECT.bottom()) - 42,
-            CONTENT_W - 32,
-            36,
-        )
         self._hint.setStyleSheet(
             f"color: {colors.rgba(colors.TEXT_SECONDARY)}; font-size: 13px;"
         )
@@ -349,20 +329,11 @@ class ShelfWindow(QWidget):
         # Rows forward remove_requested -> ViewModel.remove_item; presses on
         # row bodies fall through to the window (drag-out / window move).
         self._file_list = FileList(self)
-        self._file_list.setGeometry(
-            round(DROP_RECT.x()) + 10,
-            round(DROP_RECT.y()) + 8,
-            round(DROP_RECT.width()) - 20,
-            round(DROP_RECT.height()) - 16,
-        )
         self._file_list.remove_requested.connect(self._vm.remove_item)
         self._file_list.hide()
 
         # --- footer -------------------------------------------------------
         self._items_label = QLabel("0 items", self)
-        self._items_label.setGeometry(
-            SHADOW_MARGIN + 24, SHADOW_MARGIN + CONTENT_H - FOOTER_H + 15, 100, 18
-        )
         self._items_label.setStyleSheet(
             f"color: {colors.rgba(colors.TEXT_SECONDARY)};"
             " font-size: 12px; font-weight: 500;"
@@ -370,42 +341,18 @@ class ShelfWindow(QWidget):
 
         # Footer actions: Clear all · MOVE (outline) · COPY (filled).
         self._btn_clear = _TextButton("Clear all", self)
-        self._btn_clear.setGeometry(
-            SHADOW_MARGIN + 136,
-            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
-            66,
-            26,
-        )
         self._btn_clear.clicked.connect(self._vm.clear)
 
         self._btn_move = _TextButton("MOVE", self, variant="outline")
-        self._btn_move.setGeometry(
-            SHADOW_MARGIN + 212,
-            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
-            58,
-            26,
-        )
         self._btn_move.clicked.connect(lambda: self._open_destination_picker("move"))
 
         self._btn_copy = _TextButton("COPY", self, variant="primary")
-        self._btn_copy.setGeometry(
-            SHADOW_MARGIN + 278,
-            SHADOW_MARGIN + CONTENT_H - FOOTER_H + 11,
-            58,
-            26,
-        )
         self._btn_copy.clicked.connect(lambda: self._open_destination_picker("copy"))
         for btn in (self._btn_clear, self._btn_move, self._btn_copy):
             btn.hide()
 
         # --- operation overlay (progress / success) -----------------------
         self._progress = ProgressWidget(self)
-        self._progress.setGeometry(
-            round(DROP_RECT.x()) + 20,
-            round(DROP_RECT.y()) + (round(DROP_RECT.height()) - 96) // 2,
-            round(DROP_RECT.width()) - 40,
-            96,
-        )
         self._progress.setAttribute(Qt.WA_StyledBackground, True)
         self._progress.setStyleSheet(
             f"background-color: {colors.rgba(colors.SURFACE_CONTAINER, 230)};"
@@ -415,21 +362,16 @@ class ShelfWindow(QWidget):
         self._progress.hide()
 
         # Transfer-complete panel (reuses the overlay area).
-        overlay_x = round(DROP_RECT.x()) + 20
-        overlay_y = round(DROP_RECT.y()) + (round(DROP_RECT.height()) - 96) // 2
         self._success = QLabel("", self)
         self._success.setAlignment(Qt.AlignCenter)
         self._success.setWordWrap(True)
-        self._success.setGeometry(overlay_x, overlay_y + 10, 272, 40)
         self._success.setStyleSheet(
             f"color: {colors.rgba(colors.SUCCESS)};"
             " font-size: 13px; font-weight: 600;"
         )
         self._btn_open_dest = _TextButton("Open destination", self, variant="outline")
-        self._btn_open_dest.setGeometry(overlay_x + 16, overlay_y + 58, 120, 26)
         self._btn_open_dest.clicked.connect(self._open_destination)
         self._btn_done = _TextButton("Done", self, variant="primary")
-        self._btn_done.setGeometry(overlay_x + 272 - 16 - 76, overlay_y + 58, 76, 26)
         self._btn_done.clicked.connect(self._finish_transfer_ui)
         for w in (self._success, self._btn_open_dest, self._btn_done):
             w.hide()
@@ -455,6 +397,61 @@ class ShelfWindow(QWidget):
         self._dash_anim.valueChanged.connect(self._on_dash_tick)
         self._last_dash_step = -1
         self._dash_anim.start()
+
+        self._layout_children()
+
+    # ---------------------------------------------------------------- layout
+    def _drop_rect(self) -> QRectF:
+        """The dashed drop zone for the current window size."""
+        return QRectF(
+            SHADOW_MARGIN + DROP_PAD,
+            SHADOW_MARGIN + HEADER_H + DROP_PAD,
+            self.width() - 2 * (SHADOW_MARGIN + DROP_PAD),
+            self.height() - 2 * SHADOW_MARGIN - HEADER_H - FOOTER_H - 2 * DROP_PAD,
+        )
+
+    def _layout_children(self) -> None:
+        """Position every child from the current window size (called on
+        build and on every resize)."""
+        w, h = self.width(), self.height()
+        drop = self._drop_rect()
+        dx, dy = round(drop.x()), round(drop.y())
+        dw, dh = round(drop.width()), round(drop.height())
+
+        self._btn_history.setGeometry(w - 108, 17, 22, 22)
+        self._btn_settings.setGeometry(w - 78, 17, 22, 22)
+        self._btn_close.setGeometry(w - 48, 17, 22, 22)
+
+        self._circle.setGeometry(
+            w // 2 - CIRCLE_SIZE // 2, dy + 44, CIRCLE_SIZE, CIRCLE_SIZE
+        )
+        self._title.setGeometry(0, dy + 44 + CIRCLE_SIZE + 18, w, 34)
+        self._subtitle.setGeometry(0, dy + 44 + CIRCLE_SIZE + 52, w, 24)
+        self._hint.setGeometry(16, round(drop.bottom()) - 42, w - 32, 36)
+
+        self._file_list.setGeometry(
+            dx + 10, dy + 8, dw - 20, dh - 16
+        )
+
+        self._items_label.setGeometry(24, h - FOOTER_H + 15, 100, 18)
+        self._btn_clear.setGeometry(136, h - FOOTER_H + 11, 66, 26)
+        self._btn_move.setGeometry(212, h - FOOTER_H + 11, 58, 26)
+        self._btn_copy.setGeometry(278, h - FOOTER_H + 11, 58, 26)
+
+        overlay_x = dx + 20
+        overlay_w = dw - 40
+        overlay_y = dy + (dh - 96) // 2
+        self._progress.setGeometry(overlay_x, overlay_y, overlay_w, 96)
+        self._success.setGeometry(overlay_x, overlay_y + 10, overlay_w, 40)
+        self._btn_open_dest.setGeometry(overlay_x + 16, overlay_y + 58, 120, 26)
+        self._btn_done.setGeometry(
+            overlay_x + overlay_w - 16 - 76, overlay_y + 58, 76, 26
+        )
+
+    def resizeEvent(self, event) -> None:
+        """Re-lay every child when the shelf is resized."""
+        self._layout_children()
+        super().resizeEvent(event)
 
     def _refresh_ui(self, *_args) -> None:
         n = self._vm.count
@@ -485,18 +482,19 @@ class ShelfWindow(QWidget):
         available geometry the strip belongs to. The shelf is centred along
         the edge and clamped inside the screen.
         """
-        x = area.center().x() - CONTENT_W // 2
-        y = area.center().y() - CONTENT_H // 2
+        w, h = self.width(), self.height()
+        x = area.center().x() - w // 2
+        y = area.center().y() - h // 2
         if edge == "top":
             y = area.top()
         elif edge == "bottom":
-            y = area.bottom() - CONTENT_H + 1
+            y = area.bottom() - h + 1
         elif edge == "left":
             x = area.left()
         else:  # right
-            x = area.right() - CONTENT_W + 1
-        x = max(area.left(), min(x, area.right() - CONTENT_W))
-        y = max(area.top(), min(y, area.bottom() - CONTENT_H))
+            x = area.right() - w + 1
+        x = max(area.left(), min(x, area.right() - w))
+        y = max(area.top(), min(y, area.bottom() - h))
         self.move(x, y)
 
     def position_at_cursor(self) -> None:
@@ -504,12 +502,13 @@ class ShelfWindow(QWidget):
         pos = QCursor.pos()
         screen = QGuiApplication.screenAt(pos) or QGuiApplication.primaryScreen()
         area = screen.availableGeometry()
+        w, h = self.width(), self.height()
         # Position the content exactly where the original did (top-left at
         # the cursor).
         x = pos.x()
-        y = pos.y() - CONTENT_H
-        if x + CONTENT_W > area.right():
-            x = area.right() - CONTENT_W
+        y = pos.y() - h
+        if x + w > area.right():
+            x = area.right() - w
         if y < area.top():
             y = area.top()
         self.move(x, y)
@@ -518,7 +517,7 @@ class ShelfWindow(QWidget):
         """Top-centre of the primary screen (Window.js parity)."""
         area = QGuiApplication.primaryScreen().availableGeometry()
         self.move(
-            area.center().x() - CONTENT_W // 2,
+            area.center().x() - self.width() // 2,
             area.top(),
         )
 
@@ -549,9 +548,75 @@ class ShelfWindow(QWidget):
         self._vm.handle_drop(event)
         event.acceptProposedAction()
 
-    # ----------------------------------------------- window move / drag-out
+    # ------------------------------------------- edge resize / move / drag-out
+    @staticmethod
+    def _edge_cursor(edges: int) -> Qt.CursorShape:
+        """The resize cursor for an edge combination (0 → arrow)."""
+        horiz = edges & (_EDGE_LEFT | _EDGE_RIGHT)
+        vert = edges & (_EDGE_TOP | _EDGE_BOTTOM)
+        if horiz and vert:
+            diag = (edges & _EDGE_LEFT and edges & _EDGE_TOP) or (
+                edges & _EDGE_RIGHT and edges & _EDGE_BOTTOM
+            )
+            return Qt.SizeFDiagCursor if diag else Qt.SizeBDiagCursor
+        if horiz:
+            return Qt.SizeHorCursor
+        if vert:
+            return Qt.SizeVerCursor
+        return Qt.ArrowCursor
+
+    def _resize_edges(self, pos) -> int:
+        """Bitmask of edges within RESIZE_MARGIN of the local position."""
+        x, y = pos.x(), pos.y()
+        w, h = self.width(), self.height()
+        edges = 0
+        if x <= RESIZE_MARGIN:
+            edges |= _EDGE_LEFT
+        if x >= w - RESIZE_MARGIN:
+            edges |= _EDGE_RIGHT
+        if y <= RESIZE_MARGIN:
+            edges |= _EDGE_TOP
+        if y >= h - RESIZE_MARGIN:
+            edges |= _EDGE_BOTTOM
+        return edges
+
+    def _apply_resize(self, global_pos) -> None:
+        """Drag the recorded edges to the cursor, clamped to min/max."""
+        if self._resize_geometry is None or self._resize_global is None:
+            return
+        g = self._resize_geometry
+        dx = global_pos.x() - self._resize_global.x()
+        dy = global_pos.y() - self._resize_global.y()
+        x, y, w, h = g.x(), g.y(), g.width(), g.height()
+        if self._resizing & _EDGE_LEFT:
+            x = g.x() + dx
+            w = g.width() - dx
+        if self._resizing & _EDGE_RIGHT:
+            w = g.width() + dx
+        if self._resizing & _EDGE_TOP:
+            y = g.y() + dy
+            h = g.height() - dy
+        if self._resizing & _EDGE_BOTTOM:
+            h = g.height() + dy
+        w = max(self.minimumWidth(), min(w, self.maximumWidth()))
+        h = max(self.minimumHeight(), min(h, self.maximumHeight()))
+        if self._resizing & _EDGE_LEFT:
+            x = g.right() - w
+        if self._resizing & _EDGE_TOP:
+            y = g.bottom() - h
+        self.setGeometry(x, y, w, h)
+
     def mousePressEvent(self, event: QMouseEvent) -> None:
         if event.button() == Qt.LeftButton and not self._vm.is_working:
+            edges = self._resize_edges(event.position())
+            if edges:
+                # Press on an edge: resize instead of move / drag-out.
+                self._resizing = edges
+                self._resize_geometry = self.geometry()
+                self._resize_global = event.globalPosition().toPoint()
+                self.setCursor(self._edge_cursor(edges))
+                event.accept()
+                return
             self._drag_start_pos = event.position().toPoint()
             self._press_global = event.globalPosition().toPoint()
             self._win_start_pos = self.pos()
@@ -563,7 +628,16 @@ class ShelfWindow(QWidget):
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._resizing:
+            self._apply_resize(event.globalPosition().toPoint())
+            return
         if self._drag_start_pos is None or self._vm.is_working:
+            if not self._vm.is_working:
+                # Not pressing — hover resize cursors on the edges.
+                edges = self._resize_edges(event.position())
+                self.setCursor(
+                    self._edge_cursor(edges) if edges else Qt.ArrowCursor
+                )
             super().mouseMoveEvent(event)
             return
         # Window-local positions stop changing once the window slides under
@@ -601,6 +675,13 @@ class ShelfWindow(QWidget):
         super().mouseMoveEvent(event)
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        if self._resizing:
+            self._resizing = 0
+            self._resize_geometry = None
+            self._resize_global = None
+            self.unsetCursor()
+            event.accept()
+            return
         if self._win_dragging:
             self.unsetCursor()
         self._drag_start_pos = None
@@ -765,13 +846,13 @@ class ShelfWindow(QWidget):
         header_y = SHADOW_MARGIN + HEADER_H
         painter.drawLine(QPointF(content.left() + 1, header_y),
                          QPointF(content.right() - 1, header_y))
-        footer_y = SHADOW_MARGIN + CONTENT_H - FOOTER_H
+        footer_y = self.height() - FOOTER_H
         painter.drawLine(QPointF(content.left() + 1, footer_y),
                          QPointF(content.right() - 1, footer_y))
 
         # The dashed drop zone — idle grey, purple + glow while dragging
-        # (the "selected" state from the mockup).
-        rect = DROP_RECT
+        # (the "selected" state from the mockup). Follows the current size.
+        rect = self._drop_rect()
         if self._dragging_in:
             # Outer glow rings behind the border.
             for ring in range(3, 0, -1):

@@ -32,6 +32,10 @@ CONFIG_SCHEMA: dict[str, dict] = {
         "type": "boolean",
         "title": "Open a new instance on launch",
     },
+    "launch_at_startup": {
+        "type": "boolean",
+        "title": "Launch at startup (Windows login)",
+    },
     "always_on_top": {
         "type": "boolean",
         "title": "Always on top",
@@ -66,6 +70,8 @@ CONFIG_SCHEMA: dict[str, dict] = {
 
 DEFAULT_CONFIG: dict = {
     "spawn_on_launch": True,
+    # Launch at login via the Windows Run key (no-op on macOS/Linux).
+    "launch_at_startup": True,
     "always_on_top": True,
     "open_at_cursor_position": False,
     "shortcut_action": "toggle",

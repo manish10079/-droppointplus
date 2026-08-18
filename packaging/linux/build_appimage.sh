@@ -6,15 +6,17 @@
 # APPIMAGETOOL. Downloads it if missing.
 #
 # Usage:  ./packaging/linux/build_appimage.sh
-# Output: dist/DropPointPlus-x86_64.AppImage
+# Output: dist/DropPointPlus-<version>-x86_64.AppImage (version from the
+#         package, so release artifacts always carry it).
 set -euo pipefail
 
 cd "$(dirname "$0")/../.."   # project root
 
 APP_NAME="DropPoint+"
+VERSION="$(python -c 'from droppointplus import __version__; print(__version__)')"
 # The AppImage filename must match the workflow's upload glob
-# (dist/DropPointPlus-x86_64.AppImage).
-APPIMAGE_NAME="DropPointPlus-x86_64.AppImage"
+# (dist/DropPointPlus-*-x86_64.AppImage).
+APPIMAGE_NAME="DropPointPlus-${VERSION}-x86_64.AppImage"
 BUNDLE="dist/DropPointPlus"
 APPDIR="dist/AppDir"
 APPIMAGE_TOOL="${APPIMAGETOOL:-}"

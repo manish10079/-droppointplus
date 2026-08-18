@@ -44,6 +44,10 @@ WINDOW_W = 600
 WINDOW_H = 450
 _BODY_X = 28
 _BODY_W = WINDOW_W - 2 * _BODY_X
+# Resize bounds: the schema-driven form needs the designed size as its
+# lower limit (rows clip below it); it may grow on larger screens.
+MIN_W, MIN_H = 600, 450
+MAX_W, MAX_H = 900, 700
 
 _TOAST_STYLE = f"color: {rgba(SUCCESS)}; font-weight: 600; font-size: 12px;"
 
@@ -87,16 +91,19 @@ class SettingsDialog(PanelMixin, QDialog):
         self._init_panel(
             "DropPoint+ Settings", WINDOW_W, WINDOW_H, parent,
             always_on_top=bool(config.get("always_on_top")),
+            min_width=MIN_W, min_height=MIN_H,
+            max_width=MAX_W, max_height=MAX_H,
         )
         self.setWindowTitle("Settings - DropPoint+")
 
         # --- body: schema-driven form --------------------------------------
-        body = QWidget(self)
-        body.setGeometry(
+        self._body = QWidget(self)
+        self._body.setGeometry(
             _BODY_X, HEADER_H + 16, _BODY_W, WINDOW_H - HEADER_H - FOOTER_H - 32
         )
-        body.setStyleSheet(_CONTROL_QSS)
+        self._body.setStyleSheet(_CONTROL_QSS)
 
+        body = self._body
         form = QFormLayout(body)
         form.setContentsMargins(0, 0, 0, 0)
         form.setVerticalSpacing(14)
@@ -127,13 +134,22 @@ class SettingsDialog(PanelMixin, QDialog):
         footer.addWidget(apply_btn)
         footer.addWidget(cancel_btn)
 
-        container = QWidget(self)
-        container.setGeometry(
+        self._footer_container = QWidget(self)
+        self._footer_container.setGeometry(
             0, WINDOW_H - FOOTER_H, WINDOW_W, FOOTER_H
         )
-        container.setLayout(footer)
+        self._footer_container.setLayout(footer)
 
         self._load_values()
+
+    def resizeEvent(self, event) -> None:
+        """Re-lay the form body and footer strip to the new size."""
+        super().resizeEvent(event)  # PanelMixin repositions the header chrome
+        w, h = self.width(), self.height()
+        self._body.setGeometry(
+            _BODY_X, HEADER_H + 16, w - 2 * _BODY_X, h - HEADER_H - FOOTER_H - 32
+        )
+        self._footer_container.setGeometry(0, h - FOOTER_H, w, FOOTER_H)
 
     # -- footer buttons ------------------------------------------------------
     @staticmethod

@@ -8,7 +8,12 @@
 !define APPNAME "DropPoint+"
 !define COMPANYNAME "DropPointPlus"
 !define DESCRIPTION "Make drag and drop easier — a floating shelf for files"
-!define VERSION "0.4.0"
+; CI passes /DVERSION=<x.y.z> from the package version; the value below is
+; the local-build fallback (a script-level define would otherwise override
+; the command line).
+!ifndef VERSION
+!define VERSION "0.5.0"
+!endif
 !define OUTPUT "DropPointPlus-Setup-${VERSION}.exe"
 
 ; The PyInstaller onedir output to bundle (relative to this script).

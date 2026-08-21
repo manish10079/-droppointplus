@@ -229,13 +229,19 @@ class FileService:
             return Qt.IgnoreAction
         drag = QDrag(source)
         mime = QMimeData()
-        mime.setUrls([QUrl.fromLocalFile(str(item.path)) for item in items])
+        urls = [QUrl.fromLocalFile(str(item.path)) for item in items]
+        mime.setUrls(urls)
+        # text/plain fallback for drop targets (e.g. MTP/phone devices
+        # connected via USB) that may not handle text/uri-list natively.
+        mime.setText("\r\n".join(u.toLocalFile() for u in urls))
         drag.setMimeData(mime)
         if len(items) > 1:
             drag.setPixmap(multi_file_icon(64).pixmap(64, 64))
         else:
             drag.setPixmap(file_type_icon(items[0].file_type, 64).pixmap(64, 64))
-        return drag.exec(Qt.CopyAction | Qt.MoveAction)
+        # Offer CopyAction | MoveAction | LinkAction — some drop targets
+        # (MTP/phone shell extensions) only accept specific actions.
+        return drag.exec(Qt.CopyAction | Qt.MoveAction | Qt.LinkAction)
 
     def create_delete_worker(
         self, items: Sequence[FileItem], parent=None

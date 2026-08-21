@@ -116,10 +116,11 @@ class ShelfViewModel(QObject):
     def drag_out(self, source: "QWidget") -> None:
         """User dragged the collected files out of the shelf.
 
-        Blocks during the native OS drag; then requests the window to close.
-        In move mode the sources are deleted on a worker thread first (the
-        window stays open, showing progress, until that finishes). A
-        cancelled drag keeps the files and the shelf open.
+        Blocks during the native OS drag. In move mode the sources are
+        deleted on a worker thread (the window stays open, showing progress,
+        until that finishes). In copy mode the shelf stays open so the user
+        can drag the same files to another destination. A cancelled drag
+        keeps the files and the shelf open.
         """
         if not self._files or self.is_working:
             return
@@ -129,8 +130,6 @@ class ShelfViewModel(QObject):
             return
         if self._config.get("drag_action") == "move":
             self._begin_move(snapshot)
-        else:
-            self.close_requested.emit()
 
     def _begin_move(self, items: list[FileItem]) -> None:
         """Delete the moved sources on a worker thread, then close.

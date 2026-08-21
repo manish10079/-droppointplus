@@ -607,31 +607,36 @@ class ShelfWindow(QWidget):
         self.setGeometry(x, y, w, h)
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
-        if event.button() == Qt.LeftButton and not self._vm.is_working:
+        if event.button() == Qt.LeftButton:
             edges = self._resize_edges(event.position())
             if edges:
                 # Press on an edge: resize instead of move / drag-out.
-                self._resizing = edges
-                self._resize_geometry = self.geometry()
-                self._resize_global = event.globalPosition().toPoint()
-                self.setCursor(self._edge_cursor(edges))
-                event.accept()
-                return
-            self._drag_start_pos = event.position().toPoint()
-            self._press_global = event.globalPosition().toPoint()
-            self._win_start_pos = self.pos()
-            self._pressed_in_header = (
-                event.position().y() <= SHADOW_MARGIN + HEADER_H
-            )
-            self._drag_started = False
-            self._win_dragging = False
+                # Only allow resize when not busy (no stale geometry during
+                # an operation).
+                if not self._vm.is_working:
+                    self._resizing = edges
+                    self._resize_geometry = self.geometry()
+                    self._resize_global = event.globalPosition().toPoint()
+                    self.setCursor(self._edge_cursor(edges))
+                    event.accept()
+                    return
+            # Allow header-drag (window move) even during transfers so the
+            # user can reposition the shelf while a copy/move runs.
+            in_header = event.position().y() <= SHADOW_MARGIN + HEADER_H
+            if not self._vm.is_working or in_header:
+                self._drag_start_pos = event.position().toPoint()
+                self._press_global = event.globalPosition().toPoint()
+                self._win_start_pos = self.pos()
+                self._pressed_in_header = in_header
+                self._drag_started = False
+                self._win_dragging = False
         super().mousePressEvent(event)
 
     def mouseMoveEvent(self, event: QMouseEvent) -> None:
         if self._resizing:
             self._apply_resize(event.globalPosition().toPoint())
             return
-        if self._drag_start_pos is None or self._vm.is_working:
+        if self._drag_start_pos is None:
             if not self._vm.is_working:
                 # Not pressing — hover resize cursors on the edges.
                 edges = self._resize_edges(event.position())

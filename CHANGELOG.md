@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 Releases are tagged `vX.Y.Z` in git; the canonical version lives in
 `droppointplus/__init__.py` (`__version__`).
 
+## [0.5.2] - 2026-08-21
+
+### Fixed
+
+- **Phone USB drop not working** — dragging files from the shelf to an
+  external phone connected via USB/MTP failed silently. Added `text/plain`
+  MIME fallback and `LinkAction` to the drag data so MTP shell extensions
+  accept the drop.
+- **Shelf stuck during transfer** — the shelf window could not be
+  repositioned while a copy/move transfer was running because all mouse
+  interaction was blocked. Header-drag (window move) now works even during
+  transfers.
+- **Shelf auto-closed after copy-drag** — dragging files out of the shelf
+  in copy mode closed the shelf immediately. The shelf now stays open so
+  the user can drag the same files to multiple destinations.
+
 ## [0.5.1] - 2026-08-18
 
 ### Fixed

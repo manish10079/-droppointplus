@@ -6,4 +6,4 @@ single Python process: there is no renderer, no IPC and no Chromium — just
 Qt widgets.
 """
 
-__version__ = "0.5.1"
+__version__ = "0.5.2"
